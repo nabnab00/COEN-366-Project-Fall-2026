@@ -16,5 +16,5 @@ class ProtocolMessage:
         """decodes JSON bytes into a dictionary. Returns an error dictionary if the message is malformed."""
         try:
             return json.loads(data.decode('utf-8'))
-        except json.JSONDecodeError:
+        except (json.JSONDecodeError, UnicodeDecodeError):
             return {"error": "Malformed message"}
