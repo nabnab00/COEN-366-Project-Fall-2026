@@ -5,7 +5,7 @@ from shared.protocol import ProtocolMessage
 from shared.constants import RQGenerator, Role
 
 class CENRSClient:
-    def __init__(self, server_host='idk the number', server_port="idk the port"):
+    def __init__(self, server_host='127.0.0.1', server_port=5000):
         self.server_addr = (server_host, server_port)
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         # leave it at 0 to let the OS assign a free port
@@ -45,9 +45,9 @@ if __name__ == "__main__":
     client.send_message("REGISTER", {
         "Name": "Alice",
         "Role": Role.SUBSCRIBER.value,
-        "IP": "still don't know the ip",
+        "IP": "127.0.0.1",
         "UDP_Port": client.local_udp_port,
-        "TCP_Port": "still don't know the port"
+        "TCP_Port": 0
     })
     
     while True:
