@@ -2,6 +2,8 @@ import socket
 import threading
 from shared.protocol import ProtocolMessage, MalformedMessageError
 from shared.constants import RQGenerator
+from server.server_state import ServerState
+from server import subscriptions
 
 class EmergencyServer:
     def __init__(self, host='127.0.0.1', port=5000):
@@ -10,6 +12,7 @@ class EmergencyServer:
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.sock.bind((self.host, self.port))
         self.rq_gen = RQGenerator()
+        self.state = ServerState()
         print(f"Emergency Server started on {self.host}:{self.port}")
 
     def handle_client(self, data: bytes, addr):
@@ -28,8 +31,9 @@ class EmergencyServer:
             # Epic 2
             pass
         elif msg_type == "SUBSCRIBE":
-            # Epic 3
-            pass
+            subscriptions.handle_subscribe(self.state, msg, addr, self.send_response)
+        elif msg_type == "UNSUBSCRIBE":
+            subscriptions.handle_unsubscribe(self.state, msg, addr, self.send_response)
 
     def send_response(self, addr, msg_type: str, rq_num: int, payload: dict = None):
         """Sends a reply to a client. rq_num must be the RQ# of the request being answered."""
