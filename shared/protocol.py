@@ -1,5 +1,10 @@
 import json
 
+
+class MalformedMessageError(Exception):
+    """Raised when received bytes are not a valid protocol message."""
+
+
 class ProtocolMessage:
     @staticmethod
     def encode(msg_type: str, rq_num: int, payload: dict = None) -> bytes:
@@ -13,8 +18,26 @@ class ProtocolMessage:
 
     @staticmethod
     def decode(data: bytes) -> dict:
-        """decodes JSON bytes into a dictionary. Returns an error dictionary if the message is malformed."""
+        """decodes JSON bytes into a message dict with keys "type" (str), "rq" (int) and "data" (dict).
+        Raises MalformedMessageError if the bytes are not valid JSON or the message has the wrong shape."""
         try:
-            return json.loads(data.decode('utf-8'))
+            message = json.loads(data.decode('utf-8'))
         except (json.JSONDecodeError, UnicodeDecodeError):
-            return {"error": "Malformed message"}
+            raise MalformedMessageError("Invalid UTF-8 JSON")
+
+        if not isinstance(message, dict):
+            raise MalformedMessageError("Message is not a JSON object")
+
+        msg_type = message.get("type")
+        if not isinstance(msg_type, str) or not msg_type:
+            raise MalformedMessageError("Missing or invalid 'type'")
+
+        rq = message.get("rq")
+        # bool is a subclass of int in Python, so it has to be excluded explicitly
+        if not isinstance(rq, int) or isinstance(rq, bool):
+            raise MalformedMessageError("Missing or invalid 'rq'")
+
+        if not isinstance(message.get("data"), dict):
+            raise MalformedMessageError("Missing or invalid 'data'")
+
+        return message

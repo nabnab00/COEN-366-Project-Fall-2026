@@ -1,6 +1,6 @@
 import socket
 import threading
-from shared.protocol import ProtocolMessage
+from shared.protocol import ProtocolMessage, MalformedMessageError
 from shared.constants import RQGenerator
 
 class EmergencyServer:
@@ -14,16 +14,16 @@ class EmergencyServer:
 
     def handle_client(self, data: bytes, addr):
         """Worker thread logic for processing incoming messages."""
-        msg = ProtocolMessage.decode(data)
-        
-        if "error" in msg:
-            print(f"[{addr}] Error: {msg['error']}")
+        try:
+            msg = ProtocolMessage.decode(data)
+        except MalformedMessageError as e:
+            print(f"[{addr}] Error: {e}")
             return
-            
-        print(f"[{addr}] Received {msg['type']} (RQ: {msg.get('rq')}) | Payload: {msg.get('data')}")
-        
-        # SOutline for Epic 2 & 3
-        msg_type = msg.get("type")
+
+        print(f"[{addr}] Received {msg['type']} (RQ: {msg['rq']}) | Payload: {msg['data']}")
+
+        # Outline for Epic 2 & 3
+        msg_type = msg["type"]
         if msg_type == "REGISTER":
             # Epic 2
             pass
