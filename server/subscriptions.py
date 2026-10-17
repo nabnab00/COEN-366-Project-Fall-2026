@@ -53,10 +53,12 @@ def handle_subscribe(state: ServerState, msg: dict, addr: tuple[str, int], send_
             user = state.users[name]
             if "subscriptions" not in user:
                 user["subscriptions"] = set() # if subscriptions are not already created, initialize it to an empty set
-            user["subscriptions"].add(subscription)
-            
-            if persist is not None:
-                persist(state)
+            if subscription in user["subscriptions"]:
+                error = "Already_Subscribed"
+            else:
+                user["subscriptions"].add(subscription)
+                if persist is not None:
+                    persist(state)
 
     if error is not None:
         send_response(addr, "SUBSCRIPTION-DENIED", rq_num, {"Reason": error})
