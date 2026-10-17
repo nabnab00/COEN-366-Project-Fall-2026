@@ -31,6 +31,12 @@ class EmergencyServer:
             # Epic 3
             pass
 
+    def send_response(self, addr, msg_type: str, rq_num: int, payload: dict = None):
+        """Sends a reply to a client. rq_num must be the RQ# of the request being answered."""
+        data = ProtocolMessage.encode(msg_type, rq_num, payload)
+        self.sock.sendto(data, addr)
+        print(f"[{addr}] Sent {msg_type} (RQ: {rq_num}) | Payload: {payload or {}}")
+
     def listen(self):
         """Main loop continuously listening for incoming UDP datagrams."""
         while True:
