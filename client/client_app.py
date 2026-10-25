@@ -16,6 +16,7 @@ class CENRSClient:
         self.rq_gen = RQGenerator()
 
         self.name = None
+        self.role = None
         self.subscriptions = set()   # subscribed (location, category) pairs
         self.pending = {}                 # rq_num -> (msg_type, payload) of requests waiting for a server reply
         self.lock = threading.Lock()      # guards subscriptions and pending lists
@@ -38,11 +39,64 @@ class CENRSClient:
         """Routes an incoming message to the right handler based on its type."""
         msg_type = msg["type"]
         if msg_type in ("REGISTERED", "REGISTER-DENIED", "DE-REGISTERED", "DEREGISTER-DENIED"):
-            # TODO: Patricia: Add routing in this function for Register/Deregister message
-            pass
+            self.handle_registration_reply(msg)
         elif msg_type in ("SUBSCRIBED", "SUBSCRIPTION-DENIED", "UNSUBSCRIBED", "UNSUBSCRIPTION-DENIED"):
             self.handle_subscription_reply(msg)
 
+    def handle_registration_reply(self, msg: dict):
+        """Handles registration-related replies from the server."""
+        msg_type = msg["type"]
+        rq_num = msg["rq"]
+
+        with self.lock:
+            pending_request = self.pending.get(rq_num)
+
+            if pending_request is None:
+                print("No matching pending request.")
+                return
+
+            sent_type, payload = pending_request
+
+            if sent_type == "REGISTER":
+                valid_replies = ("REGISTERED", "REGISTER-DENIED")
+            elif sent_type == "DE-REGISTER":
+                valid_replies = ("DE-REGISTERED", "DEREGISTER-DENIED")
+            else:
+                valid_replies = ()
+
+            if msg_type not in valid_replies:
+                print("Unexpected registration response.")
+                return
+
+            self.pending.pop(rq_num)
+
+            if msg_type == "REGISTERED":
+                self.name = payload["Name"]
+                self.role = payload["Role"]
+                self.subscriptions.clear()
+
+                print(f"Registered successfully as {self.name} ({self.role})")
+                print("Locations:", msg["data"].get("Location_List", []))
+                print("Categories:", msg["data"].get("Category_List", []))
+
+            elif msg_type == "REGISTER-DENIED":
+                print("Registration denied:", msg["data"].get("Reason"))
+
+            elif msg_type == "DE-REGISTERED":
+                print(f"De-registration successful: {self.name}")
+
+                self.name = None
+                self.role = None
+                self.subscriptions.clear()
+
+                self.pending = {
+                    rq: request
+                    for rq, request in self.pending.items()
+                    if request[0] not in ("SUBSCRIBE", "UNSUBSCRIBE")
+                }
+
+            elif msg_type == "DEREGISTER-DENIED":
+                print("De-registration denied:", msg["data"].get("Reason"))
 
     def handle_subscription_reply(self, msg: dict):
         """Updates the local subscription list once the server answers SUBSCRIBED/UNSUBSCRIBED."""
@@ -84,12 +138,38 @@ class CENRSClient:
         with self.lock:
             rq_num = self.rq_gen.get_next()
             data = ProtocolMessage.encode(msg_type, rq_num, payload)
-            self.sock.sendto(data, self.server_addr)
             if expect_reply:
                 self.pending[rq_num] = (msg_type, payload)
+            try:
+                self.sock.sendto(data, self.server_addr)
+            except OSError:
+                self.pending.pop(rq_num, None)
+                raise
         print(f"Sent {msg_type} (RQ: {rq_num}) to {self.server_addr}")
         return rq_num
 
+    def register(self, name: str, role: str, tcp_port: int = 0):
+        
+        if self.name is not None:
+            print("Already registered.")
+            return
+
+        self.send_message("REGISTER", {
+            "Name": name.strip(),
+            "Role": role.strip().upper(),
+            "IP": "127.0.0.1",
+            "UDP_Port": self.local_udp_port,
+            "TCP_Port": tcp_port
+        })
+
+    def deregister(self):
+        if self.name is None:
+            print("You must register first.")
+            return
+
+        self.send_message("DE-REGISTER", {
+            "Name": self.name
+        })
 
     def subscribe(self, location: str, category: str):
         if self.name is None:
@@ -135,16 +215,4 @@ if __name__ == "__main__":
     
     time.sleep(0.5)
     
-    # For testing purposes
-    client.name = "Alice"
-
-    # Test Registration - This should be done by the user through the menu
-    client.send_message("REGISTER", {
-        "Name": client.name,
-        "Role": Role.SUBSCRIBER.value,
-        "IP": "127.0.0.1",
-        "UDP_Port": client.local_udp_port,
-        "TCP_Port": 0
-    })
     
-    run_menu_commands(client)
