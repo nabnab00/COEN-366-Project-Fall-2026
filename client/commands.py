@@ -8,9 +8,12 @@ def run_menu_commands(client):
 
         # TODO: Patricia: Implement register/deregister functions
         if choice == "1":
-            pass
+            name = input("Name: ")
+            role = input("Role (SUBSCRIBER/PUBLISHER/BOTH): ")
+            tcp_port = int(input("TCP Port (0 for subscriber): "))
+            client.register(name, role, tcp_port)
         elif choice == "2":
-            pass
+            client.deregister()
         elif choice == "3":
             location = input("Location: ")
             category = input("Category: ")
