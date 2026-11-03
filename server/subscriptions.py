@@ -33,7 +33,6 @@ def _validate_client(state: ServerState, name: str) -> str | None:
 
 
 
-# TODO: Resham: Pass the persist function once it is implemented
 def handle_subscribe(state: ServerState, msg: dict, addr: tuple[str, int], send_response, persist=None):
     """Handles a SUBSCRIBE request."""
     rq_num = msg["rq"]
