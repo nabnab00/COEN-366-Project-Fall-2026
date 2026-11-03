@@ -57,12 +57,16 @@ def handle_subscribe(state: ServerState, msg: dict, addr: tuple[str, int], send_
                 error = "Already_Subscribed"
             else:
                 user["subscriptions"].add(subscription)
-                if persist is not None:
-                    persist(state)
 
+    
     if error is not None:
         send_response(addr, "SUBSCRIPTION-DENIED", rq_num, {"Reason": error})
         return
+
+    # save after a succesful subscription
+    if persist is not None:
+        persist()
+
 
     send_response(addr, "SUBSCRIBED", rq_num)
 
@@ -90,12 +94,16 @@ def handle_unsubscribe(state: ServerState, msg: dict, addr: tuple[str, int], sen
                 error = "Not_Subscribed"
             else:
                 subscriptions.remove(subscription)
-                if persist is not None:
-                    persist(state)
 
     if error is not None:
-        send_response(addr, "UNSUBSCRIPTION-DENIED", rq_num, {"Reason": error})
-        return
+            send_response(addr, "UNSUBSCRIPTION-DENIED", rq_num, {"Reason": error})
+            return
+
+    # save after a successful unsubscription
+    if persist is not None:
+        persist()
+
+   
 
     send_response(addr, "UNSUBSCRIBED", rq_num)
 

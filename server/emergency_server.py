@@ -13,6 +13,7 @@ class EmergencyServer:
         self.sock.bind((self.host, self.port))
         self.rq_gen = RQGenerator()
         self.state = ServerState()
+        print("Restored users:", self.state.users)
         print(f"Emergency Server started on {self.host}:{self.port}")
 
     def handle_client(self, data: bytes, addr):
@@ -27,19 +28,43 @@ class EmergencyServer:
 
         # Outline for Epic 2 & 3
         msg_type = msg["type"]
+
         if msg_type == "REGISTER":
             registration.handle_register(
-                self.state, msg, addr, self.send_response
+                self.state,
+                msg,
+                addr,
+                self.send_response,
+                persist=self.state.save_to_file
             )
+
         elif msg_type == "DE-REGISTER":
             registration.handle_deregister(
-                self.state, msg, addr, self.send_response
+                self.state,
+                msg,
+                addr,
+                self.send_response,
+                persist=self.state.save_to_file
             )
+            
         elif msg_type == "SUBSCRIBE":
-            subscriptions.handle_subscribe(self.state, msg, addr, self.send_response)
-        elif msg_type == "UNSUBSCRIBE":
-            subscriptions.handle_unsubscribe(self.state, msg, addr, self.send_response)
+            subscriptions.handle_subscribe(
+                self.state,
+                msg,
+                addr,
+                self.send_response,
+                persist=self.state.save_to_file
+            )
 
+        elif msg_type == "UNSUBSCRIBE":
+            subscriptions.handle_unsubscribe(
+                self.state,
+                msg,
+                addr,
+                self.send_response,
+                persist=self.state.save_to_file
+            )
+            
     def send_response(self, addr, msg_type: str, rq_num: int, payload: dict = None):
         """Sends a reply to a client. rq_num must be the RQ# of the request being answered."""
         data = ProtocolMessage.encode(msg_type, rq_num, payload)
