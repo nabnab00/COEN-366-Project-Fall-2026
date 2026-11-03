@@ -2,6 +2,7 @@ import socket
 import threading
 import time
 import os, json, sys
+import argparse
 from shared.protocol import MalformedMessageError, ProtocolMessage
 from shared.constants import RQGenerator, Role
 from shared.logger import get_logger, log_recv, log_send
@@ -258,20 +259,23 @@ def load_profile(path):
         return json.load(f)
 
 if __name__ == "__main__":
-    if len(sys.argv) == 1:
+    parser = argparse.ArgumentParser(description="CENRS Client")
+    parser.add_argument("local_port", nargs="?", type=int, default=None, help="this client's UDP port (1024-65535, not 5000)")
+    parser.add_argument("--server-port", type=int, default=5000, help="Emergency server UDP port (default: 5000)")
+    args = parser.parse_args()
+
+    if args.local_port is None:
         profile_path = "client_profile.json"
         profile = load_profile(profile_path)
         local_port = profile["udp_port"] if profile else 0
-    elif len(sys.argv) == 2:
-        local_port = int(sys.argv[1])
-        if not 1024 <= local_port <= 65535 or local_port == 5000:
-            raise SystemExit("Use a port from 1024 to 65535, other than 5000.")
+    else:
+        local_port = args.local_port
+        if not 1024 <= local_port <= 65535 or local_port == args.server_port:
+            raise SystemExit(f"Use a port from 1024 to 65535, other than {args.server_port}.")
         profile_path = f"profiles/{local_port}.json"
         profile = load_profile(profile_path)
-    else:
-        raise SystemExit("Usage: python3 -m client.client_app [local_port]")
 
-    client = CENRSClient(local_port=local_port, profile_path=profile_path)
+    client = CENRSClient(server_port=args.server_port, local_port=local_port, profile_path=profile_path)
     if profile is not None:
         client.name = profile["name"]
         client.role = profile["role"]

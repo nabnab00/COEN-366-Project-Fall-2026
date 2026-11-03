@@ -1,6 +1,7 @@
 import socket
 import threading
 import json
+import argparse
 from shared.protocol import ProtocolMessage, MalformedMessageError
 from shared.constants import RQGenerator
 from shared.logger import get_logger, log_recv, log_send
@@ -8,13 +9,13 @@ from server.server_state import ServerState
 from server import subscriptions, registration
 
 class EmergencyServer:
-    def __init__(self, host='127.0.0.1', port=5000):
+    def __init__(self, host='127.0.0.1', port=5000, state_file="server_state.json"):
         self.host = host
         self.port = port
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.sock.bind((self.host, self.port))
         self.rq_gen = RQGenerator()
-        self.state = ServerState()
+        self.state = ServerState(state_file)
         self.log = get_logger("server", "logs/server.log")
         self.log.info(f"STATE Restored users from {self.state.filename}:\n{json.dumps(self.state.users, indent=2, default=list)}")
         self.log.info(f"Emergency Server started on {self.host}:{self.port}")
@@ -82,5 +83,9 @@ class EmergencyServer:
             threading.Thread(target=self.handle_client, args=(data, addr), daemon=True).start()
 
 if __name__ == "__main__":
-    server = EmergencyServer()
+    parser = argparse.ArgumentParser(description="CENRS Emergency Server")
+    parser.add_argument("port", nargs="?", type=int, default=5000, help="UDP port to listen on (default: 5000")
+    parser.add_argument("state_file", nargs="?", default="server_state.json", help="file used to save and restore server state")
+    args = parser.parse_args()
+    server = EmergencyServer(port=args.port, state_file=args.state_file)
     server.listen()

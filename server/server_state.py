@@ -4,10 +4,10 @@ import os
 
 
 class ServerState:
-    def __init__(self):
+    def __init__(self, filename="server_state.json"):
         self.users = {}  # name -> user profile and subscriptions
         self.lock = threading.Lock()
-        self.filename = "server_state.json"
+        self.filename = filename
 
         # Restore saved users when the server state is created
         self.load_from_file()
