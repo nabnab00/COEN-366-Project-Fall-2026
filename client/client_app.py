@@ -215,7 +215,7 @@ if __name__ == "__main__":
     
     time.sleep(0.5)
     
-    
+    """
     # For testing purposes
     client.name = "Alice"
 
@@ -227,5 +227,7 @@ if __name__ == "__main__":
         "UDP_Port": client.local_udp_port,
         "TCP_Port": 0
     })
+
+    """
 
     run_menu_commands(client)
