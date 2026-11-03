@@ -3,7 +3,7 @@ import threading
 from shared.protocol import ProtocolMessage, MalformedMessageError
 from shared.constants import RQGenerator
 from server.server_state import ServerState
-from server import subscriptions
+from server import subscriptions, registration
 
 class EmergencyServer:
     def __init__(self, host='127.0.0.1', port=5000):
@@ -28,8 +28,13 @@ class EmergencyServer:
         # Outline for Epic 2 & 3
         msg_type = msg["type"]
         if msg_type == "REGISTER":
-            # Epic 2
-            pass
+            registration.handle_register(
+                self.state, msg, addr, self.send_response
+            )
+        elif msg_type == "DE-REGISTER":
+            registration.handle_deregister(
+                self.state, msg, addr, self.send_response
+            )
         elif msg_type == "SUBSCRIBE":
             subscriptions.handle_subscribe(self.state, msg, addr, self.send_response)
         elif msg_type == "UNSUBSCRIBE":
