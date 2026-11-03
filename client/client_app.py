@@ -4,6 +4,7 @@ import time
 import os, json, sys
 from shared.protocol import ProtocolMessage
 from shared.constants import RQGenerator, Role
+from shared.logger import get_logger, log_recv, log_send
 from client.commands import run_menu_commands
 
 class CENRSClient:
@@ -19,6 +20,7 @@ class CENRSClient:
             raise SystemExit(f"UDP port {local_port} is already in use. Choose another port.")
 
         self.local_udp_port = self.sock.getsockname()[1]
+        self.log = get_logger(f"CLIENT:{self.local_udp_port}", f"logs/client_{self.local_udp_port}.log")
         self.rq_gen = RQGenerator()
 
         self.name = None
@@ -26,7 +28,7 @@ class CENRSClient:
         self.subscriptions = set()   # subscribed (location, category) pairs
         self.pending = {}                 # rq_num -> (msg_type, payload) of requests waiting for a server reply
         self.lock = threading.Lock()      # guards subscriptions and pending lists
-        print(f"Client initialized. Listening on UDP port {self.local_udp_port}")
+        self.log.info(f"Client initialized. Listening on UDP port {self.local_udp_port}")
 
 
     def listen_for_alerts(self):
@@ -35,10 +37,10 @@ class CENRSClient:
             try:
                 data, addr = self.sock.recvfrom(4096)
                 msg = ProtocolMessage.decode(data)
-                print(f"\n[INCOMING] {msg}")
+                log_recv(self.log, addr, msg['type'], msg['rq'], msg['data'])
                 self.handle_incoming_message(msg)
             except Exception as e:
-                print(f"Error receiving data: {e}")
+                self.log.error(f"Error receiving data: {e}")
 
 
     def handle_incoming_message(self, msg: dict):
@@ -58,7 +60,7 @@ class CENRSClient:
             pending_request = self.pending.get(rq_num)
 
             if pending_request is None:
-                print("No matching pending request.")
+                self.log.warning("No matching pending request.")
                 return
 
             sent_type, payload = pending_request
@@ -71,7 +73,7 @@ class CENRSClient:
                 valid_replies = ()
 
             if msg_type not in valid_replies:
-                print("Unexpected registration response.")
+                self.log.warning("Unexpected registration response.")
                 return
 
             self.pending.pop(rq_num)
@@ -112,7 +114,7 @@ class CENRSClient:
         with self.lock:
             pending_request = self.pending.pop(rq_num, None)
             if pending_request is None:
-                print(f"Reply {msg_type} (RQ: {rq_num}) does not match any pending request, ignoring.")
+                self.log.warning(f"Reply {msg_type} (RQ: {rq_num}) does not match any pending request, ignoring.")
                 return
 
             sent_msg_type, payload = pending_request
@@ -154,7 +156,7 @@ class CENRSClient:
             except OSError:
                 self.pending.pop(rq_num, None)
                 raise
-        print(f"Sent {msg_type} (RQ: {rq_num}) to {self.server_addr}")
+        log_send(self.log, self.server_addr, msg_type, rq_num, payload)
         return rq_num
 
     def register(self, name: str, role: str, tcp_port: int = 0):
