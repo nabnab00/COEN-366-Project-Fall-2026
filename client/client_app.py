@@ -227,3 +227,5 @@ if __name__ == "__main__":
         "UDP_Port": client.local_udp_port,
         "TCP_Port": 0
     })
+
+    run_menu_commands(client)
