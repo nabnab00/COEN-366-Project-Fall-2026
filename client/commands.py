@@ -6,7 +6,6 @@ def run_menu_commands(client):
         print("\n1) Register  2) Deregister  3) Subscribe  4) Unsubscribe  5) List subscriptions  q) Quit")
         choice = input("> ").strip().lower()
 
-        # TODO: Patricia: Implement register/deregister functions
         if choice == "1":
             name = input("Name: ")
             role = input("Role (SUBSCRIBER/PUBLISHER/BOTH): ")

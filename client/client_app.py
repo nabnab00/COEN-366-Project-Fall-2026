@@ -212,24 +212,22 @@ class CENRSClient:
 if __name__ == "__main__":
     client = CENRSClient()
     client.start()
+    
+    time.sleep(0.5)
+    
+    """
+    # For testing purposes
+    client.name = "Alice"
+
+    # Test Registration - This should be done by the user through the menu
+    client.send_message("REGISTER", {
+        "Name": client.name,
+        "Role": Role.SUBSCRIBER.value,
+        "IP": "127.0.0.1",
+        "UDP_Port": client.local_udp_port,
+        "TCP_Port": 0
+    })
+
+    """
 
     run_menu_commands(client)
-
-# if __name__ == "__main__":
-#     client = CENRSClient()
-#     client.start()
-    
-#     time.sleep(0.5)
-    
-    
-#     # For testing purposes
-#     client.name = "Alice"
-
-#     # Test Registration - This should be done by the user through the menu
-#     client.send_message("REGISTER", {
-#         "Name": client.name,
-#         "Role": Role.SUBSCRIBER.value,
-#         "IP": "127.0.0.1",
-#         "UDP_Port": client.local_udp_port,
-#         "TCP_Port": 0
-#     })
