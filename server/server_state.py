@@ -17,12 +17,12 @@ class ServerState:
         with self.lock:
             users_to_save = {}
 
-        # Convert subscriptions into a JSON-compatible format
-        for name, user in self.users.items():
-            users_to_save[name] = user.copy()
-            users_to_save[name]["subscriptions"] = [
-                list(sub) for sub in user["subscriptions"]
-            ]
+            # Convert subscriptions into a JSON-compatible format
+            for name, user in self.users.items():
+                users_to_save[name] = user.copy()
+                users_to_save[name]["subscriptions"] = [
+                    list(sub) for sub in user["subscriptions"]
+                ]
 
         # Write the users dictionary to the JSON file
         with open(self.filename, "w") as f:
