@@ -1,9 +1,0 @@
-{
-    "Alice": {
-        "role": "SUBSCRIBER",
-        "ip": "127.0.0.1",
-        "udp_port": 55581,
-        "tcp_port": 0,
-        "subscriptions": []
-    }
-}
