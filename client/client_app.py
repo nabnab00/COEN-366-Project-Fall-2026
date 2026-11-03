@@ -2,7 +2,7 @@ import socket
 import threading
 import time
 import os, json, sys
-from shared.protocol import ProtocolMessage
+from shared.protocol import MalformedMessageError, ProtocolMessage
 from shared.constants import RQGenerator, Role
 from shared.logger import get_logger, log_recv, log_send
 from client.commands import run_menu_commands
@@ -36,11 +36,21 @@ class CENRSClient:
         while True:
             try:
                 data, addr = self.sock.recvfrom(4096)
+            except OSError as e:
+                self.log.error(f"Socket error while receiving data: {e}")
+                continue
+
+            try:
                 msg = ProtocolMessage.decode(data)
-                log_recv(self.log, addr, msg['type'], msg['rq'], msg['data'])
+            except MalformedMessageError as e:
+                self.log.warning(f"[{addr[0]}:{addr[1]}] MALFORMED ({e}) raw={data[:200]!r}")
+                continue
+
+            log_recv(self.log, addr, msg['type'], msg['rq'], msg['data'])
+            try:
                 self.handle_incoming_message(msg)
-            except Exception as e:
-                self.log.error(f"Error receiving data: {e}")
+            except Exception:
+                self.log.exception(f"Handler for {msg['type']} (RQ: {msg['rq']}) crashed.")
 
 
     def handle_incoming_message(self, msg: dict):
@@ -50,6 +60,8 @@ class CENRSClient:
             self.handle_registration_reply(msg)
         elif msg_type in ("SUBSCRIBED", "SUBSCRIPTION-DENIED", "UNSUBSCRIBED", "UNSUBSCRIPTION-DENIED"):
             self.handle_subscription_reply(msg)
+        else:
+            self.log.warning(f"Unknown message type: {msg_type!r} (RQ: {msg['rq']}), ignored.")
 
     def handle_registration_reply(self, msg: dict):
         """Handles registration-related replies from the server."""
@@ -153,8 +165,9 @@ class CENRSClient:
                 self.pending[rq_num] = (msg_type, payload)
             try:
                 self.sock.sendto(data, self.server_addr)
-            except OSError:
+            except OSError as e:
                 self.pending.pop(rq_num, None)
+                self.log.error(f"SEND -> {self.server_addr[0]}:{self.server_addr[1]}  {msg_type} rq={rq_num} FAILED: {e}")
                 raise
         log_send(self.log, self.server_addr, msg_type, rq_num, payload)
         return rq_num
