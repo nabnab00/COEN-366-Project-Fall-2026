@@ -3,3 +3,5 @@ __pycache__/
 
 client_profile.json
 profiles/
+
+logs/
