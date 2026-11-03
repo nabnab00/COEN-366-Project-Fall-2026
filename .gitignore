@@ -5,3 +5,5 @@ client_profile.json
 profiles/
 
 logs/
+
+server_state.json
