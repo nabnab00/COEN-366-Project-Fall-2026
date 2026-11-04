@@ -24,9 +24,11 @@ class ServerState:
                     list(sub) for sub in user["subscriptions"]
                 ]
 
-        # Write the users dictionary to the JSON file
-        with open(self.filename, "w") as f:
-            json.dump(users_to_save, f, indent=4)
+            # Write while still holding the lock so two threads never write the file at the same time
+            # (create server_states/ if it doesn't exist yet)
+            os.makedirs(os.path.dirname(self.filename), exist_ok=True)
+            with open(self.filename, "w") as f:
+                json.dump(users_to_save, f, indent=4)
 
     def load_from_file(self):
         # Only load data if the file exists
