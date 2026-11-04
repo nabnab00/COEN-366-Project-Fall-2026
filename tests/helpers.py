@@ -64,11 +64,11 @@ class ServerTestCase(unittest.TestCase):
     def register(self, sock, name, role="SUBSCRIBER", tcp_port=0):
         return self.request(sock, "REGISTER", 1, self.register_data(sock, name, role, tcp_port))
 
-    # subscribe a client to a location and category
+    # subscribe a client to a location and category, rq=2 by default since 1 is used for registration follows by subscribe
     def subscribe(self, sock, name, location, category, rq=2):
         return self.request(sock, "SUBSCRIBE", rq, {"Name": name, "Location": location, "Category": category})
 
-    # unsubscribe a client from a location and category
+    # unsubscribe a client from a location and category, rq=3 by default since 2 is used for subscribe follows by unsubscribe
     def unsubscribe(self, sock, name, location, category, rq=3):
         return self.request(sock, "UNSUBSCRIBE", rq, {"Name": name, "Location": location, "Category": category})
 
