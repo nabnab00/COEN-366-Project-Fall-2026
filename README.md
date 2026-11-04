@@ -2,6 +2,15 @@
 Campus Emergency Notification and Response System (CENRS)
 
 ## Table of contents
+- [Project structure](#project-structure)
+- [Running the system](#running-the-system)
+  - [Requirements](#requirements)
+  - [Commands for your operating system](#commands-for-your-operating-system)
+  - [Starting the server](#starting-the-server)
+  - [Starting a client](#starting-a-client)
+  - [Example session](#example-session)
+  - [Resetting everything](#resetting-everything)
+  - [Current limitations](#current-limitations)
 - [Logging](#logging)
   - [Log line format](#log-line-format)
   - [Logger or print?](#logger-or-print)
@@ -11,6 +20,168 @@ Campus Emergency Notification and Response System (CENRS)
   - [How the tests work](#how-the-tests-work)
   - [Adding a test](#adding-a-test)
   - [If a test fails](#if-a-test-fails)
+
+## Project structure
+
+```
+COEN-366-Project-Fall-2026/
+├── server/
+│   ├── emergency_server.py   UDP listener: decodes each message and hands it to a handler (one thread per message)
+│   ├── registration.py       REGISTER / DE-REGISTER
+│   ├── subscriptions.py      SUBSCRIBE / UNSUBSCRIBE, and matches() for alert matching
+│   └── server_state.py       users and subscriptions in memory; saved to and loaded from a JSON file
+├── client/
+│   ├── client_app.py         CENRSClient: sends requests, receives replies on a background thread, saves its profile
+│   └── commands.py           the terminal menu
+├── shared/                   code used by both server and client
+│   ├── protocol.py           message encoding and decoding
+│   ├── constants.py          roles, locations, categories, severities, statuses, and the RQ# generator
+│   └── logger.py             logger setup and the SEND/RECV log helpers
+└── tests/                    automated tests (see Running the tests)
+```
+
+---
+Created when the system runs (all in `.gitignore`):
+
+| Folder | Contents |
+|--------|----------|
+| `server_states/` | the server's saved users and subscriptions |
+| `profiles/` | each client's saved profile (name, role, subscriptions) |
+| `logs/` | log files for the server and each client |
+
+Every message is a JSON object with the same three fields:
+```json
+{"type": "REGISTER", "rq": 1, "data": {"Name": "Alice", "Role": "SUBSCRIBER", "IP": "127.0.0.1", "UDP_Port": 6001, "TCP_Port": 0}}
+```
+`type` is the message type, `rq` is the RQ# (request number), and `data` holds the message's fields.
+A reply carries the same `rq` as the request it answers.
+
+## Running the system
+
+Run every command from the repository root, one terminal per process.
+
+### Requirements
+- Python 3.10 or later
+- No packages to install: the code only uses Python's standard library
+
+### Commands for your operating system
+The rest of this README writes commands with `python3`, as on macOS and Linux.
+**On Windows, type `py` instead of `python3`** (or `python` if `py` isn't found). Everything after it is the same.
+
+Open a separate terminal window or tab for the server and for each client, and `cd` into the repository folder in each one.
+
+#### macOS
+Terminal app: **Cmd + T** opens a new tab.
+```bash
+python3 --version                                # check Python is installed (3.10 or later)
+python3 -m server.emergency_server               # start the server
+python3 -m client.client_app 6001                # start a client
+python3 -m unittest -v                           # run the tests
+rm -rf server_states profiles logs               # reset everything
+```
+
+#### Linux
+Most terminals: **Ctrl + Shift + T** opens a new tab.
+```bash
+python3 --version
+python3 -m server.emergency_server
+python3 -m client.client_app 6001
+python3 -m unittest -v
+rm -rf server_states profiles logs
+```
+
+#### Windows (PowerShell)
+Windows Terminal: **Ctrl + Shift + T** opens a new tab.
+```powershell
+py --version
+py -m server.emergency_server
+py -m client.client_app 6001
+py -m unittest -v
+Remove-Item -Recurse -Force server_states, profiles, logs
+```
+If Windows Defender Firewall asks whether to allow Python on the network, allow it on private networks.
+
+### Starting the server
+```bash
+python3 -m server.emergency_server
+```
+The server listens on UDP `127.0.0.1:5000` and saves its state to `server_states/server_state.json`.
+On startup it restores the saved users and subscriptions, so a restarted server remembers everyone.
+
+Optional arguments (only needed for testing; the demo uses the defaults):
+
+| Argument | Default | Meaning |
+|----------|---------|---------|
+| `port` | `5000` | UDP port the server listens on |
+| `state_file` | `server_state.json` | state file name, inside `server_states/` |
+
+```bash
+python3 -m server.emergency_server 5099 test.json     # test server: port 5099, server_states/test.json
+```
+
+### Starting a client
+Start each client in its own terminal, with its own UDP port:
+```bash
+python3 -m client.client_app 6001
+python3 -m client.client_app 6002
+```
+- Use a port from 1024 to 65535, other than the server's port.
+- The client saves its profile in `profiles/`. Starting it again on the same port restores that profile.
+- With no port, the client picks a free port the first time and saves it in `profiles/client_profile.json`.
+
+Optional argument (only needed for testing):
+
+| Argument | Default | Meaning |
+|----------|---------|---------|
+| `--server-port` | `5000` | UDP port of the server to talk to |
+
+```bash
+python3 -m client.client_app 6101 --server-port 5099   # talk to the test server
+```
+When switching to a different server, use a client port you haven't used before.
+Otherwise the client restores a profile that the other server has never heard of.
+
+#### Menu
+
+| Option | Action | You are asked for |
+|--------|--------|-------------------|
+| `1` | Register | name, role (`SUBSCRIBER`, `PUBLISHER` or `BOTH`), TCP port (`0` for a subscriber; publishers need a real port) |
+| `2` | De-register | — |
+| `3` | Subscribe | location, category |
+| `4` | Unsubscribe | location, category |
+| `5` | List subscriptions | — |
+| `q` | Quit | — |
+
+Locations: `HALL`, `EV`, `JMSB`, `LOYOLA`, `SGW`, `ALL`
+Categories: `FIRE`, `SECURITY`, `WEATHER`, `POWER`, `BUILDING`, `GENERAL`, `ALL`
+`ALL` is a wildcard: `ALL/FIRE` matches a fire alert at any location.
+
+### Example session
+```bash
+# Terminal 1
+python3 -m server.emergency_server
+
+# Terminal 2: Alice
+python3 -m client.client_app 6001      # 1 → Alice, SUBSCRIBER, 0    then 3 → HALL, FIRE
+
+# Terminal 3: Bob
+python3 -m client.client_app 6002      # 1 → Bob, SUBSCRIBER, 0      then 3 → ALL, ALL
+```
+Each terminal shows the messages sent and received; the same lines are written to `logs/`.
+
+### Resetting everything
+Delete the generated folders to start from scratch
+(on Windows, use the PowerShell command in [Commands for your operating system](#commands-for-your-operating-system)):
+```bash
+rm -rf server_states profiles logs
+```
+Reset `server_states/` and `profiles/` **together**. If only the server is reset, clients still believe
+they are registered, and the server ignores their DE-REGISTER because it has no record of them.
+
+### Current limitations
+- The server listens on `127.0.0.1` and clients register with IP `127.0.0.1`, so everything must run on the same machine.
+- A client gets no feedback if the server never replies (for example, DE-REGISTER for a name the server doesn't know).
+  A reply timeout is planned for Phase 2.
 
 ## Logging
 
