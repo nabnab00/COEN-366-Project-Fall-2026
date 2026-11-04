@@ -7,3 +7,4 @@ profiles/
 logs/
 
 server_state.json
+server_states/
