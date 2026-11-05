@@ -1,17 +1,23 @@
 import socket
 import threading
 import time
+import os, json, sys
 from shared.protocol import ProtocolMessage
 from shared.constants import RQGenerator, Role
 from client.commands import run_menu_commands
 
 class CENRSClient:
 
-    def __init__(self, server_host='127.0.0.1', server_port=5000):
+    def __init__(self, server_host='127.0.0.1', server_port=5000, local_port=0, profile_path="client_profile.json"):
         self.server_addr = (server_host, server_port)
+        self.profile_path = profile_path
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        # leave it at 0 to let the OS assign a free port
-        self.sock.bind(('', 0)) 
+
+        try:
+            self.sock.bind(('', local_port))
+        except OSError:
+            raise SystemExit(f"UDP port {local_port} is already in use. Choose another port.")
+
         self.local_udp_port = self.sock.getsockname()[1]
         self.rq_gen = RQGenerator()
 
@@ -74,7 +80,7 @@ class CENRSClient:
                 self.name = payload["Name"]
                 self.role = payload["Role"]
                 self.subscriptions.clear()
-
+                self.save_profile()
                 print(f"Registered successfully as {self.name} ({self.role})")
                 print("Locations:", msg["data"].get("Location_List", []))
                 print("Categories:", msg["data"].get("Category_List", []))
@@ -84,7 +90,7 @@ class CENRSClient:
 
             elif msg_type == "DE-REGISTERED":
                 print(f"De-registration successful: {self.name}")
-
+                self.delete_profile()
                 self.name = None
                 self.role = None
                 self.subscriptions.clear()
@@ -130,6 +136,9 @@ class CENRSClient:
                 print(f"Not subscribed to {location}/{category}.")
             else:
                 print(f"{sent_msg_type} {location}/{category} denied: {error_reason}")
+                return
+
+            self.save_profile()
 
 
     def send_message(self, msg_type: str, payload: dict, expect_reply: bool = True) -> int:
@@ -203,14 +212,59 @@ class CENRSClient:
         for location, category in subscriptions:
             print(f" - {location} / {category}")
 
+    # Helper functions to save client profile locally
+    def save_profile(self):
+        folder = os.path.dirname(self.profile_path)
+        if folder:
+            os.makedirs(folder, exist_ok=True)
+        with open(self.profile_path, "w") as f:
+            json.dump({
+                "name": self.name,
+                "role": self.role,
+                "udp_port": self.local_udp_port,
+                "subscriptions": list(self.subscriptions),
+            }, f)
+
+    # Helper function to delete the client profile locally
+    def delete_profile(self):
+        if os.path.exists(self.profile_path):
+            os.remove(self.profile_path)
 
     def start(self):
         # Start the background listening thread
         threading.Thread(target=self.listen_for_alerts, daemon=True).start()
 
 
+# Helper function to load a previously registered client profile from a file
+def load_profile(path):
+    if not os.path.exists(path):
+        return None
+    with open(path) as f:
+        return json.load(f)
+
 if __name__ == "__main__":
-    client = CENRSClient()
+    if len(sys.argv) == 1:
+        profile_path = "client_profile.json"
+        profile = load_profile(profile_path)
+        local_port = profile["udp_port"] if profile else 0
+    elif len(sys.argv) == 2:
+        local_port = int(sys.argv[1])
+        if not 1024 <= local_port <= 65535 or local_port == 5000:
+            raise SystemExit("Use a port from 1024 to 65535, other than 5000.")
+        profile_path = f"profiles/{local_port}.json"
+        profile = load_profile(profile_path)
+    else:
+        raise SystemExit("Usage: python3 -m client.client_app [local_port]")
+
+    client = CENRSClient(local_port=local_port, profile_path=profile_path)
+    if profile is not None:
+        client.name = profile["name"]
+        client.role = profile["role"]
+        client.subscriptions = {
+            tuple(pair) for pair in profile.get("subscriptions", [])
+        }
+        print(f"Restored {client.name} on UDP port {client.local_udp_port}")
+        
     client.start()
     
     time.sleep(0.5)

@@ -97,9 +97,6 @@ def handle_register(state, msg, addr, send_response, persist=None):
                 "subscriptions": set()
             }
 
-            # Optional integration hook for teammate
-            if persist is not None:
-                persist(state)
 
             error = None
 
@@ -109,6 +106,9 @@ def handle_register(state, msg, addr, send_response, persist=None):
             {"Reason": error}
         )
         return
+    
+    if persist is not None:
+        persist()
 
     print(f"[REGISTER] Registered {name} ({role})")
 
@@ -154,11 +154,6 @@ def handle_deregister(state, msg, addr, send_response, persist=None):
             error = "Endpoint_Mismatch"
         else:
             del state.users[name]
-
-            # Optional integration hook for teammate
-            if persist is not None:
-                persist(state)
-
             error = None
 
     if error is not None:
@@ -168,9 +163,12 @@ def handle_deregister(state, msg, addr, send_response, persist=None):
         )
         return
 
+    # Save after successful deregistration, outside the lock
+    if persist is not None:
+        persist()
+
     print(f"[DE-REGISTER] Removed {name}")
 
-    # Team-defined confirmation extension
     send_response(
         addr, "DE-REGISTERED", rq_num, {}
     )
