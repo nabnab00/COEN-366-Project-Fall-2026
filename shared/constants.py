@@ -28,6 +28,10 @@ class Severity(Enum):
     WARNING = "WARNING"
     CRITICAL = "CRITICAL"
 
+class IncidentStatus(Enum):
+    ACTIVE = "ACTIVE"
+    CLOSED = "CLOSED"
+
 class Status(Enum):
     SAFE = "SAFE"
     NEED_HELP = "NEED_HELP"

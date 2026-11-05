@@ -29,13 +29,14 @@ COEN-366-Project-Fall-2026/
 │   ├── emergency_server.py   UDP listener: decodes each message and hands it to a handler (one thread per message)
 │   ├── registration.py       REGISTER / DE-REGISTER
 │   ├── subscriptions.py      SUBSCRIBE / UNSUBSCRIBE, and matches() for alert matching
-│   └── server_state.py       users and subscriptions in memory; saved to and loaded from a JSON file
+│   ├── incidents.py          Incident model (version, ACTIVE/CLOSED) and the Incident_ID generator
+│   └── server_state.py       users, subscriptions and incidents in memory; users saved to and loaded from a JSON file
 ├── client/
 │   ├── client_app.py         CENRSClient: sends requests, receives replies on a background thread, saves its profile
 │   └── commands.py           the terminal menu
 ├── shared/                   code used by both server and client
 │   ├── protocol.py           message encoding and decoding
-│   ├── constants.py          roles, locations, categories, severities, statuses, and the RQ# generator
+│   ├── constants.py          roles, locations, categories, severities, user and incident statuses, and the RQ# generator
 │   └── logger.py             logger setup and the SEND/RECV log helpers
 └── tests/                    automated tests (see Running the tests)
 ```
@@ -281,6 +282,7 @@ Run the tests **before every push / pull request**.
 | `tests/test_registration.py` | REGISTER and DE-REGISTER, including denial reasons |
 | `tests/test_subscriptions.py` | SUBSCRIBE, UNSUBSCRIBE, and wildcard matching |
 | `tests/test_persistence.py` | recovery after a crash, and concurrent clients |
+| `tests/test_incidents.py` | Incident model, version and status changes, and unique Incident_IDs (unit tests, no server process) |
 
 ### Adding a test
 Add a method whose name starts with `test_` to a class that inherits from `ServerTestCase`:
