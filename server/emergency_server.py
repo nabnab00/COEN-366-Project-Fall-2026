@@ -1,30 +1,34 @@
 import socket
 import threading
+import json
+import argparse
 from shared.protocol import ProtocolMessage, MalformedMessageError
 from shared.constants import RQGenerator
+from shared.logger import get_logger, log_recv, log_send
 from server.server_state import ServerState
 from server import subscriptions, registration
 
 class EmergencyServer:
-    def __init__(self, host='127.0.0.1', port=5000):
+    def __init__(self, host='127.0.0.1', port=5000, state_file="server_state.json"):
         self.host = host
         self.port = port
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.sock.bind((self.host, self.port))
         self.rq_gen = RQGenerator()
-        self.state = ServerState()
-        print("Restored users:", self.state.users)
-        print(f"Emergency Server started on {self.host}:{self.port}")
+        self.state = ServerState(state_file)
+        self.log = get_logger("server", "logs/server.log")
+        self.log.info(f"STATE Restored users from {self.state.filename}:\n{json.dumps(self.state.users, indent=2, default=list)}")
+        self.log.info(f"Emergency Server started on {self.host}:{self.port}")
 
     def handle_client(self, data: bytes, addr):
         """Worker thread logic for processing incoming messages."""
         try:
             msg = ProtocolMessage.decode(data)
         except MalformedMessageError as e:
-            print(f"[{addr}] Error: {e}")
+            self.log.warning(f"[{addr}] Error: {e}")
             return
 
-        print(f"[{addr}] Received {msg['type']} (RQ: {msg['rq']}) | Payload: {msg['data']}")
+        log_recv(self.log, addr, msg['type'], msg['rq'], msg['data'])        
 
         # Outline for Epic 2 & 3
         msg_type = msg["type"]
@@ -69,7 +73,7 @@ class EmergencyServer:
         """Sends a reply to a client. rq_num must be the RQ# of the request being answered."""
         data = ProtocolMessage.encode(msg_type, rq_num, payload)
         self.sock.sendto(data, addr)
-        print(f"[{addr}] Sent {msg_type} (RQ: {rq_num}) | Payload: {payload or {}}")
+        log_send(self.log, addr, msg_type, rq_num, payload)
 
     def listen(self):
         """Main loop continuously listening for incoming UDP datagrams."""
@@ -79,5 +83,9 @@ class EmergencyServer:
             threading.Thread(target=self.handle_client, args=(data, addr), daemon=True).start()
 
 if __name__ == "__main__":
-    server = EmergencyServer()
+    parser = argparse.ArgumentParser(description="CENRS Emergency Server")
+    parser.add_argument("port", nargs="?", type=int, default=5000, help="UDP port to listen on (default: 5000")
+    parser.add_argument("state_file", nargs="?", default="server_state.json", help="file used to save and restore server state")
+    args = parser.parse_args()
+    server = EmergencyServer(port=args.port, state_file=args.state_file)
     server.listen()

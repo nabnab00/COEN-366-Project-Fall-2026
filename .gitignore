@@ -3,3 +3,8 @@ __pycache__/
 
 client_profile.json
 profiles/
+
+logs/
+
+server_state.json
+server_states/

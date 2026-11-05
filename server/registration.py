@@ -1,10 +1,13 @@
 
 import ipaddress
+import logging
 
 from shared.constants import Role, Location, Category
 
 
 VALID_ROLES = {role.value for role in Role}
+
+log = logging.getLogger("server")
 
 
 def handle_register(state, msg, addr, send_response, persist=None):
@@ -110,7 +113,7 @@ def handle_register(state, msg, addr, send_response, persist=None):
     if persist is not None:
         persist()
 
-    print(f"[REGISTER] Registered {name} ({role})")
+    log.info(f"STATE  [REGISTER] Registered {name} ({role})")
 
     send_response(
         addr, "REGISTERED", rq_num,
@@ -145,7 +148,7 @@ def handle_deregister(state, msg, addr, send_response, persist=None):
 
         # Per the assignment: silently ignore unknown names
         if user is None:
-            print(f"[DE-REGISTER] Unknown user: {name}")
+            log.info(f"STATE  [DE-REGISTER] Unknown user: {name}")
             return
 
         # Prevent a different client endpoint from
@@ -167,7 +170,7 @@ def handle_deregister(state, msg, addr, send_response, persist=None):
     if persist is not None:
         persist()
 
-    print(f"[DE-REGISTER] Removed {name}")
+    log.info(f"STATE  [DE-REGISTER] Removed {name}")
 
     send_response(
         addr, "DE-REGISTERED", rq_num, {}

@@ -2,15 +2,17 @@ import socket
 import threading
 import time
 import os, json, sys
-from shared.protocol import ProtocolMessage
+import argparse
+from shared.protocol import MalformedMessageError, ProtocolMessage
 from shared.constants import RQGenerator, Role
+from shared.logger import get_logger, log_recv, log_send
 from client.commands import run_menu_commands
 
 class CENRSClient:
 
     def __init__(self, server_host='127.0.0.1', server_port=5000, local_port=0, profile_path="client_profile.json"):
         self.server_addr = (server_host, server_port)
-        self.profile_path = profile_path
+        self.profile_path = "profiles/" + profile_path
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
         try:
@@ -19,6 +21,7 @@ class CENRSClient:
             raise SystemExit(f"UDP port {local_port} is already in use. Choose another port.")
 
         self.local_udp_port = self.sock.getsockname()[1]
+        self.log = get_logger(f"CLIENT:{self.local_udp_port}", f"logs/client_{self.local_udp_port}.log")
         self.rq_gen = RQGenerator()
 
         self.name = None
@@ -26,7 +29,7 @@ class CENRSClient:
         self.subscriptions = set()   # subscribed (location, category) pairs
         self.pending = {}                 # rq_num -> (msg_type, payload) of requests waiting for a server reply
         self.lock = threading.Lock()      # guards subscriptions and pending lists
-        print(f"Client initialized. Listening on UDP port {self.local_udp_port}")
+        self.log.info(f"Client initialized. Listening on UDP port {self.local_udp_port}")
 
 
     def listen_for_alerts(self):
@@ -34,11 +37,21 @@ class CENRSClient:
         while True:
             try:
                 data, addr = self.sock.recvfrom(4096)
+            except OSError as e:
+                self.log.error(f"Socket error while receiving data: {e}")
+                continue
+
+            try:
                 msg = ProtocolMessage.decode(data)
-                print(f"\n[INCOMING] {msg}")
+            except MalformedMessageError as e:
+                self.log.warning(f"[{addr[0]}:{addr[1]}] MALFORMED ({e}) raw={data[:200]!r}")
+                continue
+
+            log_recv(self.log, addr, msg['type'], msg['rq'], msg['data'])
+            try:
                 self.handle_incoming_message(msg)
-            except Exception as e:
-                print(f"Error receiving data: {e}")
+            except Exception:
+                self.log.exception(f"Handler for {msg['type']} (RQ: {msg['rq']}) crashed.")
 
 
     def handle_incoming_message(self, msg: dict):
@@ -48,6 +61,8 @@ class CENRSClient:
             self.handle_registration_reply(msg)
         elif msg_type in ("SUBSCRIBED", "SUBSCRIPTION-DENIED", "UNSUBSCRIBED", "UNSUBSCRIPTION-DENIED"):
             self.handle_subscription_reply(msg)
+        else:
+            self.log.warning(f"Unknown message type: {msg_type!r} (RQ: {msg['rq']}), ignored.")
 
     def handle_registration_reply(self, msg: dict):
         """Handles registration-related replies from the server."""
@@ -58,7 +73,7 @@ class CENRSClient:
             pending_request = self.pending.get(rq_num)
 
             if pending_request is None:
-                print("No matching pending request.")
+                self.log.warning("No matching pending request.")
                 return
 
             sent_type, payload = pending_request
@@ -71,7 +86,7 @@ class CENRSClient:
                 valid_replies = ()
 
             if msg_type not in valid_replies:
-                print("Unexpected registration response.")
+                self.log.warning("Unexpected registration response.")
                 return
 
             self.pending.pop(rq_num)
@@ -112,7 +127,7 @@ class CENRSClient:
         with self.lock:
             pending_request = self.pending.pop(rq_num, None)
             if pending_request is None:
-                print(f"Reply {msg_type} (RQ: {rq_num}) does not match any pending request, ignoring.")
+                self.log.warning(f"Reply {msg_type} (RQ: {rq_num}) does not match any pending request, ignoring.")
                 return
 
             sent_msg_type, payload = pending_request
@@ -151,10 +166,11 @@ class CENRSClient:
                 self.pending[rq_num] = (msg_type, payload)
             try:
                 self.sock.sendto(data, self.server_addr)
-            except OSError:
+            except OSError as e:
                 self.pending.pop(rq_num, None)
+                self.log.error(f"SEND -> {self.server_addr[0]}:{self.server_addr[1]}  {msg_type} rq={rq_num} FAILED: {e}")
                 raise
-        print(f"Sent {msg_type} (RQ: {rq_num}) to {self.server_addr}")
+        log_send(self.log, self.server_addr, msg_type, rq_num, payload)
         return rq_num
 
     def register(self, name: str, role: str, tcp_port: int = 0):
@@ -243,20 +259,23 @@ def load_profile(path):
         return json.load(f)
 
 if __name__ == "__main__":
-    if len(sys.argv) == 1:
+    parser = argparse.ArgumentParser(description="CENRS Client")
+    parser.add_argument("local_port", nargs="?", type=int, default=None, help="this client's UDP port (1024-65535, not 5000)")
+    parser.add_argument("--server-port", type=int, default=5000, help="Emergency server UDP port (default: 5000)")
+    args = parser.parse_args()
+
+    if args.local_port is None:
         profile_path = "client_profile.json"
         profile = load_profile(profile_path)
         local_port = profile["udp_port"] if profile else 0
-    elif len(sys.argv) == 2:
-        local_port = int(sys.argv[1])
-        if not 1024 <= local_port <= 65535 or local_port == 5000:
-            raise SystemExit("Use a port from 1024 to 65535, other than 5000.")
-        profile_path = f"profiles/{local_port}.json"
-        profile = load_profile(profile_path)
     else:
-        raise SystemExit("Usage: python3 -m client.client_app [local_port]")
+        local_port = args.local_port
+        if not 1024 <= local_port <= 65535 or local_port == args.server_port:
+            raise SystemExit(f"Use a port from 1024 to 65535, other than {args.server_port}.")
+        profile_path = f"{local_port}.json"
+        profile = load_profile(profile_path)
 
-    client = CENRSClient(local_port=local_port, profile_path=profile_path)
+    client = CENRSClient(server_port=args.server_port, local_port=local_port, profile_path=profile_path)
     if profile is not None:
         client.name = profile["name"]
         client.role = profile["role"]
