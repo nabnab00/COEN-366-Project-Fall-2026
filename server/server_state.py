@@ -21,8 +21,7 @@ class ServerState:
         self.incident_ids.seed(self.incidents.keys())
 
     def create_incident(self, publisher, category, location, severity, title, description, attachment="NONE") -> Incident:
-        """Creates a new ACTIVE incident at version 1 with a fresh Incident_ID and stores it.
-        The caller must hold self.lock, the same way handlers modify self.users."""
+
         incident = Incident(
             incident_id=self.incident_ids.get_next(),
             publisher=publisher,
@@ -47,7 +46,6 @@ class ServerState:
         return None, None
 
     def get_incident(self, incident_id) -> Incident | None:
-        """Returns the incident with this ID, or None if it doesn't exist. The caller must hold self.lock."""
         return self.incidents.get(incident_id)
 
     def save_to_file(self):
