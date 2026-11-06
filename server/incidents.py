@@ -20,7 +20,6 @@ class IncidentIDGenerator:
         self._counter = 0
 
     def seed(self, existing_ids):
-        """Continue numbering after the highest existing ID. IDs that don't follow the INC### format are ignored."""
         with self._lock:
             for incident_id in existing_ids:
                 number = parse_incident_number(incident_id)
