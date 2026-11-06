@@ -11,7 +11,6 @@ UNKNOWN_ADDR = ("127.0.0.1", 6999)
 
 
 def alert_data(**overrides):
-    """A valid PUBLISH_ALERT payload (the spec 2.3 example); pass keyword arguments to change fields."""
     data = {"Category": "FIRE", "Location": "HALL", "Severity": "CRITICAL",
             "Title": "Fire Alarm", "Description": "Evacuate the building now",
             "Attachment": "evacuation_map.pdf"}

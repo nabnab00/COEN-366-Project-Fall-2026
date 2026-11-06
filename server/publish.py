@@ -6,12 +6,10 @@ from server.incidents import Incident
 log = logging.getLogger("server")
 
 PUBLISHER_ROLES = {Role.PUBLISHER.value, Role.BOTH.value}
-# ALL is a subscription wildcard (spec 2.2), not a real place or category, so an incident can't use it
 INCIDENT_LOCATIONS = {loc.value for loc in Location if loc is not Location.ALL}
 INCIDENT_CATEGORIES = {cat.value for cat in Category if cat is not Category.ALL}
 SEVERITIES = {sev.value for sev in Severity}
 
-# Limits keep every ALERT for the incident inside one UDP datagram (the receivers read 4096 bytes)
 MAX_TITLE_LENGTH = 100
 MAX_DESCRIPTION_LENGTH = 1000
 MAX_ATTACHMENT_LENGTH = 255
@@ -28,7 +26,7 @@ def _validate_publish_request(data: dict) -> str | None:
         if not isinstance(data[field], str):
             return "Malformed_Request"
 
-    # Title and Description are JSON strings, so spaces are allowed (spec 2.3 encoding requirement)
+    # 2.3 needed
     title = data["Title"]
     description = data["Description"]
     if not isinstance(title, str) or not title.strip() or len(title) > MAX_TITLE_LENGTH:
@@ -53,8 +51,6 @@ def _validate_publish_request(data: dict) -> str | None:
 
 
 def _valid_attachment(attachment) -> bool:
-    """Attachment is NONE or a plain file name the publisher keeps locally (spec 2.3).
-    Paths are refused so a subscriber can never ask a publisher for a file outside its shared folder."""
     if attachment == "NONE":
         return True
     return (
@@ -68,13 +64,7 @@ def _valid_attachment(attachment) -> bool:
 
 
 def handle_publish_alert(state, msg, addr, send_response, persist=None) -> Incident | None:
-    """Handles a PUBLISH_ALERT request (spec 2.3).
 
-    The sender is identified by its registered IP and UDP port, since PUBLISH_ALERT has no Name field.
-    If the client also sends a Name, it must be the name registered at that endpoint.
-    On success, replies ALERT_ACCEPTED with the new Incident_ID and returns the incident
-    so the server can distribute it (P2-03). On failure, replies ALERT_DENIED and returns None.
-    """
     rq_num = msg["rq"]
     data = msg["data"]
 

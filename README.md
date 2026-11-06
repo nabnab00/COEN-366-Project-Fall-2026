@@ -188,7 +188,7 @@ they are registered, and the server ignores their DE-REGISTER because it has no 
   A reply timeout is planned for Phase 2.
 
 ## Protocol decisions
-Choices the spec leaves to the team. Copy these into the report's design and assumptions sections.
+Choices the spec leaves to the team. Copy these into the report's design and assumptions sections.IDK what to write so I let Ai do it. Reminder to delete after !!!!
 
 ### PUBLISH_ALERT
 Request payload: `Category`, `Location`, `Severity`, `Title`, `Description`, and optionally `Attachment` (missing means `NONE`) and `Name`.

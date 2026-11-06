@@ -36,9 +36,6 @@ class ServerState:
         return incident
 
     def find_user_by_endpoint(self, addr) -> tuple[str, dict] | tuple[None, None]:
-        """Returns (name, user) for the registered client whose IP and UDP port match addr, or (None, None).
-        PUBLISH_ALERT, UPDATE_ALERT and CLOSE_ALERT carry no Name field, so the server identifies
-        the sender by the endpoint it registered with. The caller must hold self.lock."""
         ip, udp_port = addr
         for name, user in self.users.items():
             if user["ip"] == ip and user["udp_port"] == udp_port:
