@@ -6,7 +6,7 @@ from shared.protocol import ProtocolMessage, MalformedMessageError
 from shared.constants import RQGenerator
 from shared.logger import get_logger, log_recv, log_send
 from server.server_state import ServerState
-from server import subscriptions, registration
+from server import subscriptions, registration, publish
 
 class EmergencyServer:
     def __init__(self, host='127.0.0.1', port=5000, state_file="server_state.json"):
@@ -68,7 +68,17 @@ class EmergencyServer:
                 self.send_response,
                 persist=self.state.save_to_file
             )
-            
+
+        elif msg_type == "PUBLISH_ALERT":
+            incident = publish.handle_publish_alert(
+                self.state,
+                msg,
+                addr,
+                self.send_response,
+                persist=self.state.save_to_file
+            )
+            # TODO P2-03: if incident is not None, send ALERT to every matching subscriber
+
     def send_response(self, addr, msg_type: str, rq_num: int, payload: dict = None):
         """Sends a reply to a client. rq_num must be the RQ# of the request being answered."""
         data = ProtocolMessage.encode(msg_type, rq_num, payload)
