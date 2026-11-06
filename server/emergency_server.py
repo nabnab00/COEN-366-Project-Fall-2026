@@ -6,7 +6,7 @@ from shared.protocol import ProtocolMessage, MalformedMessageError
 from shared.constants import RQGenerator
 from shared.logger import get_logger, log_recv, log_send
 from server.server_state import ServerState
-from server import subscriptions, registration, publish
+from server import subscriptions, registration, publish, alerts
 
 class EmergencyServer:
     def __init__(self, host='127.0.0.1', port=5000, state_file="server_state.json"):
@@ -77,13 +77,21 @@ class EmergencyServer:
                 self.send_response,
                 persist=self.state.save_to_file
             )
-            # TODO P2-03: if incident is not None, send ALERT to every matching subscriber
+            if incident is not None:
+                alerts.distribute_alert(self.state, incident, self.send_notification)
 
     def send_response(self, addr, msg_type: str, rq_num: int, payload: dict = None):
         """Sends a reply to a client. rq_num must be the RQ# of the request being answered."""
         data = ProtocolMessage.encode(msg_type, rq_num, payload)
         self.sock.sendto(data, addr)
         log_send(self.log, addr, msg_type, rq_num, payload)
+
+    def send_notification(self, addr, msg_type: str, payload: dict, needs_ack: bool = False) -> int:
+        """2.4. Server-initiated message (ALERT, ALERT_UPDATE, ALL_CLEAR) with a new RQ#. Returns the RQ#."""
+        rq_num = self.rq_gen.get_next()
+        self.send_response(addr, msg_type, rq_num, payload)
+        # TODO P2-04: if needs_ack, start the ACK timer and retransmit (2.5)
+        return rq_num
 
     def listen(self):
         """Main loop continuously listening for incoming UDP datagrams."""

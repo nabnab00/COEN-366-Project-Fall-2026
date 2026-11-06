@@ -10,6 +10,7 @@ class ServerState:
         self.users = {}  # name -> user profile and subscriptions
         self.incidents = {}  # Incident_ID -> Incident
         self.incident_ids = IncidentIDGenerator()
+        self.alert_recipients = {}  # Incident_ID -> names that were sent the incident (ALL_CLEAR goes to them, 2.7)
         self.lock = threading.Lock()
         self.filename = "server_states/" + filename
 

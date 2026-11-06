@@ -13,6 +13,7 @@ Campus Emergency Notification and Response System (CENRS)
   - [Current limitations](#current-limitations)
 - [Protocol decisions](#protocol-decisions)
   - [PUBLISH_ALERT](#publish_alert)
+  - [ALERT](#alert)
 - [Logging](#logging)
   - [Log line format](#log-line-format)
   - [Logger or print?](#logger-or-print)
@@ -33,6 +34,7 @@ COEN-366-Project-Fall-2026/
 │   ├── subscriptions.py      SUBSCRIBE / UNSUBSCRIBE, and matches() for alert matching
 │   ├── incidents.py          Incident model (version, ACTIVE/CLOSED) and the Incident_ID generator
 │   ├── publish.py            PUBLISH_ALERT
+│   ├── alerts.py             sends ALERT to every matching subscriber
 │   └── server_state.py       users, subscriptions and incidents in memory; users saved to and loaded from a JSON file
 ├── client/
 │   ├── client_app.py         CENRSClient: sends requests, receives replies on a background thread, saves its profile
@@ -208,6 +210,14 @@ Request payload: `Category`, `Location`, `Severity`, `Title`, `Description`, and
 | `ALERT_DENIED Endpoint_Mismatch` | `Name` was sent but belongs to a different client |
 | `ALERT_DENIED Unauthorized_Role` | the sender is registered as SUBSCRIBER |
 
+### ALERT
+Sent right after `ALERT_ACCEPTED`. Payload: `Incident_ID`, `Version`, `Category`, `Location`, `Severity`, `Title`, `Description`, `Attachment`.
+
+- **Who receives it:** every registered SUBSCRIBER or BOTH client with a matching subscription, using the `ALL` wildcard (`matches()` in `subscriptions.py`). A BOTH publisher subscribed to its own location receives its own alert.
+- **RQ#:** each ALERT gets a new RQ# from the server's generator, so every recipient sees a different RQ# for the same Incident_ID and Version.
+- **Recipients are recorded** in `ServerState.alert_recipients`, so ALL_CLEAR (P2-08) can reach everyone who was sent the incident.
+- **Reliability:** CRITICAL alerts are sent with `needs_ack=True` through `EmergencyServer.send_notification`. The ACK timer and retransmission are added there in P2-04.
+
 ## Logging
 
 The spec requires that the marker can see every message sent and received, plus progress and failures.
@@ -307,6 +317,7 @@ Run the tests **before every push / pull request**.
 | `tests/test_subscriptions.py` | SUBSCRIBE, UNSUBSCRIBE, and wildcard matching |
 | `tests/test_persistence.py` | recovery after a crash, and concurrent clients |
 | `tests/test_publish.py` | PUBLISH_ALERT: who may publish, every denial reason, unique IDs under concurrent publishes, and the reply over UDP |
+| `tests/test_alerts.py` | ALERT distribution: wildcard matching, roles, CRITICAL needs an ACK, and which clients receive it over UDP |
 | `tests/test_incidents.py` | Incident model, version and status changes, and unique Incident_IDs (unit tests, no server process) |
 
 ### Adding a test
