@@ -61,8 +61,8 @@ class CENRSClient:
             self.handle_registration_reply(msg)
         elif msg_type in ("SUBSCRIBED", "SUBSCRIPTION-DENIED", "UNSUBSCRIBED", "UNSUBSCRIPTION-DENIED"):
             self.handle_subscription_reply(msg)
-        # TODO P2-06: ALERT, ALERT_UPDATE, ALL_CLEAR: show it, skip duplicate (Incident_ID, Version), send ALERT_ACK (2.4-2.7)
-        # TODO P2-10: ALERT_ACCEPTED/DENIED, ALERT_UPDATED, ALERT_CLOSED, STATUS_RECORDED/REJECTED: show the reply
+        # TODO P2-06
+        # TODO P2-10
         else:
             self.log.warning(f"Unknown message type: {msg_type!r} (RQ: {msg['rq']}), ignored.")
 
@@ -230,7 +230,7 @@ class CENRSClient:
         for location, category in subscriptions:
             print(f" - {location} / {category}")
 
-    # TODO P2-10: publish_alert(), update_alert(), close_alert() and report_status() (2.3, 2.6-2.8)
+    # TODO P2-10
 
     # Helper functions to save client profile locally
     def save_profile(self):

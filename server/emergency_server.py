@@ -80,10 +80,10 @@ class EmergencyServer:
             if incident is not None:
                 alerts.distribute_alert(self.state, incident, self.send_notification)
 
-        # TODO P2-05: elif msg_type == "ALERT_ACK": cancel its ACK timer and record the delivery (2.5)
-        # TODO P2-07: elif msg_type == "UPDATE_ALERT": reply ALERT_UPDATED, then send ALERT_UPDATE (2.6)
-        # TODO P2-08: elif msg_type == "CLOSE_ALERT": reply ALERT_CLOSED, then send ALL_CLEAR (2.7)
-        # TODO P2-09: elif msg_type == "STATUS_REPORT": reply STATUS_RECORDED or STATUS_REJECTED (2.8)
+        # TODO P2-05
+        # TODO P2-07
+        # TODO P2-08
+        # TODO P2-09
 
     def send_response(self, addr, msg_type: str, rq_num: int, payload: dict = None):
         """Sends a reply to a client. rq_num must be the RQ# of the request being answered."""
@@ -95,7 +95,7 @@ class EmergencyServer:
         """2.4. Server-initiated message (ALERT, ALERT_UPDATE, ALL_CLEAR) with a new RQ#. Returns the RQ#."""
         rq_num = self.rq_gen.get_next()
         self.send_response(addr, msg_type, rq_num, payload)
-        # TODO P2-04: if needs_ack, start the ACK timer and retransmit (2.5)
+        # TODO P2-04
         return rq_num
 
     def listen(self):
@@ -109,7 +109,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="CENRS Emergency Server")
     parser.add_argument("port", nargs="?", type=int, default=5000, help="UDP port to listen on (default: 5000")
     parser.add_argument("state_file", nargs="?", default="server_state.json", help="file used to save and restore server state")
-    # TODO P2-12: add a --drop-rate option that randomly drops sent messages to test retransmission
+    # TODO P2-12
     args = parser.parse_args()
     server = EmergencyServer(port=args.port, state_file=args.state_file)
     server.listen()

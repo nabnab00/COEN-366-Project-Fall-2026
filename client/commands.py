@@ -23,7 +23,7 @@ def run_menu_commands(client):
             client.unsubscribe(location, category)
         elif choice == "5":
             client.list_subscriptions()
-        # TODO P2-10: menu options to publish, update and close an alert, and to send a status report
+        # TODO P2-10
         elif choice == "q":
             break
         else:

@@ -11,7 +11,7 @@ class ServerState:
         self.incidents = {}  # Incident_ID -> Incident
         self.incident_ids = IncidentIDGenerator()
         self.alert_recipients = {}  # Incident_ID -> names that were sent the incident (ALL_CLEAR goes to them, 2.7)
-        # TODO P2-09: store the latest status report per (name, Incident_ID) (2.8)
+        # TODO P2-09
         self.lock = threading.Lock()
         self.filename = "server_states/" + filename
 
@@ -62,7 +62,7 @@ class ServerState:
             # Write while still holding the lock so two threads never write the file at the same time
             # (create server_states/ if it doesn't exist yet)
             os.makedirs(os.path.dirname(self.filename), exist_ok=True)
-            # TODO P2-11: also save incidents (Incident.to_dict()), status reports and delivery state
+            # TODO P2-11
             with open(self.filename, "w") as f:
                 json.dump(users_to_save, f, indent=4)
 
@@ -77,4 +77,4 @@ class ServerState:
                 user["subscriptions"] = {
                     tuple(sub) for sub in user["subscriptions"]
                 }
-            # TODO P2-11: restore incidents with Incident.from_dict(), plus status reports and delivery state
+            # TODO P2-11

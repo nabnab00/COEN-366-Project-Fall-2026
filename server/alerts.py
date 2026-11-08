@@ -36,5 +36,5 @@ def distribute_alert(state, incident, send_notification) -> list[str]:
     return names
 
 
-# TODO P2-07: ALERT_UPDATE goes to the same matching subscribers; reuse matching_subscribers() (2.6)
-# TODO P2-08: ALL_CLEAR goes to state.alert_recipients plus current matches, always with needs_ack=True (2.7)
+# TODO P2-07
+# TODO P2-08
