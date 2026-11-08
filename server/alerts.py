@@ -34,3 +34,7 @@ def distribute_alert(state, incident, send_notification) -> list[str]:
     log.info(f"STATE  [ALERT] {payload['Incident_ID']} v{payload['Version']} sent to "
              f"{len(names)} subscriber(s): {', '.join(names) or 'none'}")
     return names
+
+
+# TODO P2-07: ALERT_UPDATE goes to the same matching subscribers; reuse matching_subscribers() (2.6)
+# TODO P2-08: ALL_CLEAR goes to state.alert_recipients plus current matches, always with needs_ack=True (2.7)
