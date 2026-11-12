@@ -61,6 +61,8 @@ class CENRSClient:
             self.handle_registration_reply(msg)
         elif msg_type in ("SUBSCRIBED", "SUBSCRIPTION-DENIED", "UNSUBSCRIBED", "UNSUBSCRIPTION-DENIED"):
             self.handle_subscription_reply(msg)
+        # TODO P2-06
+        # TODO P2-10
         else:
             self.log.warning(f"Unknown message type: {msg_type!r} (RQ: {msg['rq']}), ignored.")
 
@@ -227,6 +229,8 @@ class CENRSClient:
         print("Your subscriptions:")
         for location, category in subscriptions:
             print(f" - {location} / {category}")
+
+    # TODO P2-10
 
     # Helper functions to save client profile locally
     def save_profile(self):

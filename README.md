@@ -11,6 +11,9 @@ Campus Emergency Notification and Response System (CENRS)
   - [Example session](#example-session)
   - [Resetting everything](#resetting-everything)
   - [Current limitations](#current-limitations)
+- [Protocol decisions](#protocol-decisions)
+  - [PUBLISH_ALERT](#publish_alert)
+  - [ALERT](#alert)
 - [Logging](#logging)
   - [Log line format](#log-line-format)
   - [Logger or print?](#logger-or-print)
@@ -29,13 +32,16 @@ COEN-366-Project-Fall-2026/
 │   ├── emergency_server.py   UDP listener: decodes each message and hands it to a handler (one thread per message)
 │   ├── registration.py       REGISTER / DE-REGISTER
 │   ├── subscriptions.py      SUBSCRIBE / UNSUBSCRIBE, and matches() for alert matching
-│   └── server_state.py       users and subscriptions in memory; saved to and loaded from a JSON file
+│   ├── incidents.py          Incident model (version, ACTIVE/CLOSED) and the Incident_ID generator
+│   ├── publish.py            PUBLISH_ALERT
+│   ├── alerts.py             sends ALERT to every matching subscriber
+│   └── server_state.py       users, subscriptions and incidents in memory; users saved to and loaded from a JSON file
 ├── client/
 │   ├── client_app.py         CENRSClient: sends requests, receives replies on a background thread, saves its profile
 │   └── commands.py           the terminal menu
 ├── shared/                   code used by both server and client
 │   ├── protocol.py           message encoding and decoding
-│   ├── constants.py          roles, locations, categories, severities, statuses, and the RQ# generator
+│   ├── constants.py          roles, locations, categories, severities, user and incident statuses, and the RQ# generator
 │   └── logger.py             logger setup and the SEND/RECV log helpers
 └── tests/                    automated tests (see Running the tests)
 ```
@@ -183,6 +189,35 @@ they are registered, and the server ignores their DE-REGISTER because it has no 
 - A client gets no feedback if the server never replies (for example, DE-REGISTER for a name the server doesn't know).
   A reply timeout is planned for Phase 2.
 
+## Protocol decisions
+Choices the spec leaves to the team. Copy these into the report's design and assumptions sections.IDK what to write so I let Ai do it. Reminder to delete after !!!!
+
+### PUBLISH_ALERT
+Request payload: `Category`, `Location`, `Severity`, `Title`, `Description`, and optionally `Attachment` (missing means `NONE`) and `Name`.
+
+- **Identifying the publisher.** The spec's PUBLISH_ALERT has no Name field, so the server finds the sender by the IP and UDP port it registered with (`ServerState.find_user_by_endpoint`). If the client also sends `Name`, it must be the name registered at that endpoint. UPDATE_ALERT and CLOSE_ALERT should use the same lookup.
+- **Title and Description** are JSON strings, so spaces need no special encoding. Both must be non-empty; Title is limited to 100 characters and Description to 1000, so every ALERT fits in one UDP datagram.
+- **ALL is only a subscription wildcard.** An incident must name a real location and category.
+- **Attachment** is `NONE` or a plain file name. Paths (`/`, `\`, `..`) are refused so a subscriber can never ask a publisher for a file outside its shared folder.
+
+| Reply | When |
+|-------|------|
+| `ALERT_ACCEPTED {Incident_ID}` | incident created at version 1, status ACTIVE |
+| `ALERT_DENIED Malformed_Request` | a required field is missing, the wrong type, empty, or too long |
+| `ALERT_DENIED Invalid_Category` / `Invalid_Location` / `Invalid_Severity` | value not in the list (or `ALL`) |
+| `ALERT_DENIED Invalid_Attachment` | attachment is a path or not a valid file name |
+| `ALERT_DENIED Not_Registered` | no client is registered at the sender's IP and UDP port |
+| `ALERT_DENIED Endpoint_Mismatch` | `Name` was sent but belongs to a different client |
+| `ALERT_DENIED Unauthorized_Role` | the sender is registered as SUBSCRIBER |
+
+### ALERT
+Sent right after `ALERT_ACCEPTED`. Payload: `Incident_ID`, `Version`, `Category`, `Location`, `Severity`, `Title`, `Description`, `Attachment`.
+
+- **Who receives it:** every registered SUBSCRIBER or BOTH client with a matching subscription, using the `ALL` wildcard (`matches()` in `subscriptions.py`). A BOTH publisher subscribed to its own location receives its own alert.
+- **RQ#:** each ALERT gets a new RQ# from the server's generator, so every recipient sees a different RQ# for the same Incident_ID and Version.
+- **Recipients are recorded** in `ServerState.alert_recipients`, so ALL_CLEAR (P2-08) can reach everyone who was sent the incident.
+- **Reliability:** CRITICAL alerts are sent with `needs_ack=True` through `EmergencyServer.send_notification`. The ACK timer and retransmission are added there in P2-04.
+
 ## Logging
 
 The spec requires that the marker can see every message sent and received, plus progress and failures.
@@ -281,6 +316,9 @@ Run the tests **before every push / pull request**.
 | `tests/test_registration.py` | REGISTER and DE-REGISTER, including denial reasons |
 | `tests/test_subscriptions.py` | SUBSCRIBE, UNSUBSCRIBE, and wildcard matching |
 | `tests/test_persistence.py` | recovery after a crash, and concurrent clients |
+| `tests/test_publish.py` | PUBLISH_ALERT: who may publish, every denial reason, unique IDs under concurrent publishes, and the reply over UDP |
+| `tests/test_alerts.py` | ALERT distribution: wildcard matching, roles, CRITICAL needs an ACK, and which clients receive it over UDP |
+| `tests/test_incidents.py` | Incident model, version and status changes, and unique Incident_IDs (unit tests, no server process) |
 
 ### Adding a test
 Add a method whose name starts with `test_` to a class that inherits from `ServerTestCase`:

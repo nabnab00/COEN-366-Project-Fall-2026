@@ -108,7 +108,7 @@ def handle_unsubscribe(state: ServerState, msg: dict, addr: tuple[str, int], sen
 
 
 
-# TODO: Use this function in phase 2 for handling alerts and sending notifs to clients
+# Used by server/alerts.py to find who receives an alert (2.4)
 def matches(subscriptions, location, category):
     """Checks if an alert at (location, category) matches any of the user's subscriptions."""
     for sub_location, sub_category in subscriptions:

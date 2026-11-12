@@ -6,7 +6,7 @@ from shared.protocol import ProtocolMessage, MalformedMessageError
 from shared.constants import RQGenerator
 from shared.logger import get_logger, log_recv, log_send
 from server.server_state import ServerState
-from server import subscriptions, registration
+from server import subscriptions, registration, publish, alerts
 
 class EmergencyServer:
     def __init__(self, host='127.0.0.1', port=5000, state_file="server_state.json"):
@@ -68,12 +68,35 @@ class EmergencyServer:
                 self.send_response,
                 persist=self.state.save_to_file
             )
-            
+
+        elif msg_type == "PUBLISH_ALERT":
+            incident = publish.handle_publish_alert(
+                self.state,
+                msg,
+                addr,
+                self.send_response,
+                persist=self.state.save_to_file
+            )
+            if incident is not None:
+                alerts.distribute_alert(self.state, incident, self.send_notification)
+
+        # TODO P2-05
+        # TODO P2-07
+        # TODO P2-08
+        # TODO P2-09
+
     def send_response(self, addr, msg_type: str, rq_num: int, payload: dict = None):
         """Sends a reply to a client. rq_num must be the RQ# of the request being answered."""
         data = ProtocolMessage.encode(msg_type, rq_num, payload)
         self.sock.sendto(data, addr)
         log_send(self.log, addr, msg_type, rq_num, payload)
+
+    def send_notification(self, addr, msg_type: str, payload: dict, needs_ack: bool = False) -> int:
+        """2.4. Server-initiated message (ALERT, ALERT_UPDATE, ALL_CLEAR) with a new RQ#. Returns the RQ#."""
+        rq_num = self.rq_gen.get_next()
+        self.send_response(addr, msg_type, rq_num, payload)
+        # TODO P2-04
+        return rq_num
 
     def listen(self):
         """Main loop continuously listening for incoming UDP datagrams."""
@@ -86,6 +109,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="CENRS Emergency Server")
     parser.add_argument("port", nargs="?", type=int, default=5000, help="UDP port to listen on (default: 5000")
     parser.add_argument("state_file", nargs="?", default="server_state.json", help="file used to save and restore server state")
+    # TODO P2-12
     args = parser.parse_args()
     server = EmergencyServer(port=args.port, state_file=args.state_file)
     server.listen()
