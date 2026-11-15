@@ -11,6 +11,7 @@ class ServerState:
         self.incidents = {}  # Incident_ID -> Incident
         self.incident_ids = IncidentIDGenerator()
         self.alert_recipients = {}  # Incident_ID -> names that were sent the incident (ALL_CLEAR goes to them, 2.7)
+        self.delivery_status = {}   # Incident_ID -> {name: {"version": int, "status": PENDING/CONFIRMED/UNCONFIRMED}} (2.5)
         # TODO P2-09
         self.lock = threading.Lock()
         self.filename = "server_states/" + filename
@@ -46,6 +47,10 @@ class ServerState:
 
     def get_incident(self, incident_id) -> Incident | None:
         return self.incidents.get(incident_id)
+
+    def record_delivery(self, incident_id, version, name, status):
+        """Caller must hold self.lock."""
+        self.delivery_status.setdefault(incident_id, {})[name] = {"version": version, "status": status}
 
     def save_to_file(self):
         # locked the shared state while we save
