@@ -38,7 +38,7 @@ class TestDistribution(unittest.TestCase):
         add("NoSubs", "SUBSCRIBER")
         add("Publisher", "PUBLISHER", ("HALL", "FIRE"))  # can't really subscribe; must still be skipped
 
-    def fake_send(self, addr, msg_type, payload, needs_ack=False):
+    def fake_send(self, addr, msg_type, payload, needs_ack=False, name=None):
         self.sent.append((addr, msg_type, payload, needs_ack))
         return len(self.sent)
 
@@ -140,6 +140,62 @@ class TestAlertsOverUDP(ServerTestCase):
         self.assertEqual(reply["type"], "ALERT_ACCEPTED")
         alert = self.receive(facilities)
         self.assertEqual((alert["type"], alert["data"]["Severity"]), ("ALERT", "INFO"))
+
+
+class TestRetransmissionOverUDP(ServerTestCase):
+    """End-to-end: a subscriber that never sends ALERT_ACK gets the CRITICAL alert 3 times before listing as unconfirmed."""
+
+    server_args = ["--ack-timeout", "0.2"]
+
+    def subscriber(self, name, location, category):
+        sock = self.new_client()
+        self.register(sock, name)
+        self.assertEqual(self.subscribe(sock, name, location, category)["type"], "SUBSCRIBED")
+        return sock
+
+    def publish(self, **overrides):
+        publisher = self.new_client()
+        self.register(publisher, "CampusSecurity", "PUBLISHER", tcp_port=7001)
+        reply = self.request(publisher, "PUBLISH_ALERT", 45, alert_data(**overrides))
+        self.assertEqual(reply["type"], "ALERT_ACCEPTED")
+        return reply["data"]["Incident_ID"]
+
+    def assert_nothing_received(self, sock):
+        sock.settimeout(2)
+        with self.assertRaises(socket.timeout):
+            sock.recvfrom(4096)
+
+    def test_no_ack_receives_alert_three_times_with_same_rq(self):
+        alice = self.subscriber("Alice", "HALL", "FIRE")
+        incident_id = self.publish()
+        alerts = [self.receive(alice) for _ in range(3)]
+        for alert in alerts:
+            self.assertEqual(alert["type"], "ALERT")
+            self.assertEqual(alert["data"]["Incident_ID"], incident_id)
+            self.assertEqual(alert["rq"], alerts[0]["rq"])  # a retransmission keeps the original RQ#
+
+    def test_no_more_alerts_after_third_attempt(self):
+        alice = self.subscriber("Alice", "HALL", "FIRE")
+        self.publish()
+        for _ in range(3):
+            self.receive(alice)
+        self.assert_nothing_received(alice)  # the server gave up and marked Alice UNCONFIRMED
+
+    def test_info_alert_is_not_retransmitted(self):
+        alice = self.subscriber("Alice", "HALL", "FIRE")
+        self.publish(Severity="INFO")
+        self.assertEqual(self.receive(alice)["data"]["Severity"], "INFO")
+        self.assert_nothing_received(alice)
+
+    def test_each_subscriber_gets_its_own_retransmissions(self):
+        alice = self.subscriber("Alice", "HALL", "FIRE")
+        bob = self.subscriber("Bob", "HALL", "FIRE")
+        self.publish()
+        alice_rqs = {self.receive(alice)["rq"] for _ in range(3)}
+        bob_rqs = {self.receive(bob)["rq"] for _ in range(3)}
+        self.assertEqual(len(alice_rqs), 1)  # all 3 of Alice's ALERTs share one RQ#
+        self.assertEqual(len(bob_rqs), 1)
+        self.assertNotEqual(alice_rqs, bob_rqs)  # each subscriber has its own RQ#
 
 
 if __name__ == "__main__":
