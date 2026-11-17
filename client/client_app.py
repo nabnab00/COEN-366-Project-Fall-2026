@@ -350,21 +350,21 @@ class CENRSClient:
 
     # TODO P2-10
     def publish_alert(self, category, location, severity, title, description, attachment="NONE"):
-                if self.name is None:
-                        print("You must register first.")
-                        return
+            if self.name is None:
+                print("You must register first.")
+                return
 
-                if self.role not in ("PUBLISHER", "BOTH"):
-                        print("You must be a publisher to publish alerts.")
-                        return
+            if self.role not in ("PUBLISHER", "BOTH"):
+                print("You must be a publisher to publish alerts.")
+                return
 
-                self.send_message("PUBLISH_ALERT", {
-                        "Category": category.strip().upper(),
-                        "Location": location.strip().upper(),
-                        "Severity": severity.strip().upper(),
-                        "Title": title.strip(),
-                        "Description": description.strip(),
-                        "Attachment": attachment.strip() or "NONE"  
+            self.send_message("PUBLISH_ALERT", {
+                "Category": category.strip().upper(),
+                "Location": location.strip().upper(),
+                "Severity": severity.strip().upper(),
+                "Title": title.strip(),
+                "Description": description.strip(),
+                "Attachment": attachment.strip() or "NONE"  
                 })
 
     def update_alert(self, incident_id, severity, title, description):
@@ -380,7 +380,7 @@ class CENRSClient:
             return
 
         self.send_message("UPDATE_ALERT", {
-            "Incident_ID":incident_id.strip() ,
+            "Incident_ID":incident_id.strip().upper() ,
             "Severity": severity.strip().upper(),
             "Title": title.strip() ,
             "Description": description.strip() 
@@ -399,7 +399,7 @@ class CENRSClient:
             return
 
         self.send_message("CLOSE_ALERT", {
-            "Incident_ID":incident_id.strip(),
+            "Incident_ID":incident_id.strip().upper(),
             "Reason": reason.strip()
         })
 
@@ -416,7 +416,7 @@ class CENRSClient:
             return
 
         self.send_message("STATUS_REPORT", {
-            "Incident_ID": incident_id.strip(),
+            "Incident_ID": incident_id.strip().upper(),
             "Name": self.name.strip(),
             "Status": status.strip().upper()
         })
