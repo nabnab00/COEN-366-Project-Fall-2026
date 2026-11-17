@@ -27,14 +27,14 @@ def run_menu_commands(client):
         elif choice == "6":
             category = input("Category: ")
             location = input("Location: ")
-            severity = input("Severity: ")
+            severity = input("Severity (INFO/WARNING/CRITICAL): ")
             title = input("Title: ")
             description = input("Description: ")
             attachment = input("Attachment (optional): ")
             client.publish_alert(category, location, severity, title, description, attachment)
         elif choice == "7":
             incident_id = input("Incident ID: ")
-            severity = input("Severity: ")
+            severity = input("Severity (INFO/WARNING/CRITICAL): ")
             title = input("Title: ")
             description = input("Description: ")
             client.update_alert(incident_id, severity, title, description)
@@ -44,7 +44,7 @@ def run_menu_commands(client):
             client.close_alert(incident_id, reason)
         elif choice == "9":
             incident_id = input("Incident ID: ")
-            status = input("Status: ")
+            status = input("Status (SAFE/NEED_HELP/LEFT_AREA) ")
             client.status_report(incident_id, status)
         elif choice == "q":
             break
