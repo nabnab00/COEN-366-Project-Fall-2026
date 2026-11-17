@@ -231,6 +231,77 @@ class CENRSClient:
             print(f" - {location} / {category}")
 
     # TODO P2-10
+    def publish_alert(self, category, location, severity,
+                  title, description, attachment="NONE"):
+                if self.name is None:
+                        print("You must register first.")
+                        return
+
+                if self.role not in ("PUBLISHER", "BOTH"):
+                        print("You must be a publisher to publish alerts.")
+                        return
+
+                self.send_message("PUBLISH_ALERT", {
+                        "Category": category.strip().upper(),
+                        "Location": location.strip().upper(),
+                        "Severity": severity.strip().upper(),
+                        "Title": title.strip(),
+                        "Description": description.strip(),
+                        "Attachment": attachment.strip() or "NONE"  
+                })
+
+    def update_alert(self, incident_id, severity, title, description):
+
+        # TODO: Check whether the client is registered
+        if self.name is None:
+            print("You must register first.")
+            return
+
+        # TODO: Check whether the client can publish
+        if self.role not in ("PUBLISHER", "BOTH"):
+            print("You must be a publisher to update alerts.")
+            return
+
+        self.send_message("UPDATE_ALERT", {
+            "Incident_ID":incident_id.strip() ,
+            "Severity": severity.strip().upper(),
+            "Title": title.strip() ,
+            "Description": description.strip() 
+        })
+
+    def close_alert(self, incident_id, reason):
+
+        # TODO: Check registration
+        if self.name is None:
+            print('You must register first')
+
+        # TODO: Check publisher role
+        if self.role not in ("PUBLISHER", "BOTH"):
+            print("You must be a publisher to close alerts.")
+            return
+
+        self.send_message("CLOSE_ALERT", {
+            "Incident_ID":incident_id.strip(),
+            "Reason": reason.strip()
+        })
+
+    def status_report(self, incident_id, status):
+
+        # TODO: Check registration
+        if self.name is None:
+            print('You must register first')
+            return
+
+        # TODO: Check for SUBSCRIBER or BOTH role
+        if self.role not in ("SUBSCRIBER", "BOTH"):
+            print("You must be a subscriber to send status reports.")
+            return
+
+        self.send_message("STATUS_REPORT", {
+            "Incident_ID": incident_id.strip(),
+            "Name": incident_id.strip(),
+            "Status": status.strip().upper()
+        })
 
     # Helper functions to save client profile locally
     def save_profile(self):
