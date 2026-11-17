@@ -349,8 +349,7 @@ class CENRSClient:
             print(f" - {location} / {category}")
 
     # TODO P2-10
-    def publish_alert(self, category, location, severity,
-                  title, description, attachment="NONE"):
+    def publish_alert(self, category, location, severity, title, description, attachment="NONE"):
                 if self.name is None:
                         print("You must register first.")
                         return
