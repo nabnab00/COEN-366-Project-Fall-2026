@@ -7,6 +7,7 @@ from shared.constants import RQGenerator
 from shared.logger import get_logger, log_recv, log_send
 from server.server_state import ServerState
 from server import subscriptions, registration, publish, alerts
+from server import status_reports
 
 class EmergencyServer:
     def __init__(self, host='127.0.0.1', port=5000, state_file="server_state.json"):
@@ -77,13 +78,33 @@ class EmergencyServer:
                 self.send_response,
                 persist=self.state.save_to_file
             )
+
+        elif msg_type == "STATUS_REPORT":
+            status_reports.handle_status_report(
+                self.state,
+                msg,
+                addr,
+                self.send_response,
+                persist=self.state.save_to_file
+            )
+
+        elif msg_type == "UPDATE_ALERT":
+            alerts.handle_update_alert(
+                self.state,
+                msg,
+                addr,
+                self.send_response,
+                self.send_notification,
+                persist=self.state.save_to_file,
+            )
+
             if incident is not None:
                 alerts.distribute_alert(self.state, incident, self.send_notification)
 
         # TODO P2-05
-        # TODO P2-07
+      
         # TODO P2-08
-        # TODO P2-09
+    
 
     def send_response(self, addr, msg_type: str, rq_num: int, payload: dict = None):
         """Sends a reply to a client. rq_num must be the RQ# of the request being answered."""

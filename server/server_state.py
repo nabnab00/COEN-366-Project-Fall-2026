@@ -11,7 +11,7 @@ class ServerState:
         self.incidents = {}  # Incident_ID -> Incident
         self.incident_ids = IncidentIDGenerator()
         self.alert_recipients = {}  # Incident_ID -> names that were sent the incident (ALL_CLEAR goes to them, 2.7)
-        # TODO P2-09
+        self.status_reports = {}  # incident ID -> {client name: latest status}
         self.lock = threading.Lock()
         self.filename = "server_states/" + filename
 
@@ -48,33 +48,78 @@ class ServerState:
         return self.incidents.get(incident_id)
 
     def save_to_file(self):
-        # locked the shared state while we save
         with self.lock:
             users_to_save = {}
 
-            # Convert subscriptions into a JSON-compatible format
+            # JSON cannot store sets, so convert subscriptions to lists.
             for name, user in self.users.items():
                 users_to_save[name] = user.copy()
                 users_to_save[name]["subscriptions"] = [
                     list(sub) for sub in user["subscriptions"]
                 ]
 
-            # Write while still holding the lock so two threads never write the file at the same time
-            # (create server_states/ if it doesn't exist yet)
+            state_to_save = {
+                "schema_version": 2,
+                "users": users_to_save,
+
+                # Convert Incident objects into dictionaries.
+                "incidents": {
+                    incident_id: incident.to_dict()
+                    for incident_id, incident in self.incidents.items()
+                },
+
+                "status_reports": self.status_reports,
+
+                # Convert recipient sets into lists.
+                "alert_recipients": {
+                    incident_id: list(names)
+                    for incident_id, names in self.alert_recipients.items()
+                },
+            }
+
             os.makedirs(os.path.dirname(self.filename), exist_ok=True)
-            # TODO P2-11
-            with open(self.filename, "w") as f:
-                json.dump(users_to_save, f, indent=4)
+
+            # Write a temporary file first, then replace the old save.
+            temp_filename = self.filename + ".tmp"
+
+            with open(temp_filename, "w", encoding="utf-8") as f:
+                json.dump(state_to_save, f, indent=4)
+                f.flush()
+                os.fsync(f.fileno())
+
+            os.replace(temp_filename, self.filename)
 
     def load_from_file(self):
-        # Only load data if the file exists
-        if os.path.exists(self.filename):
-            with open(self.filename, "r") as f:
-                self.users = json.load(f)
+        if not os.path.exists(self.filename):
+            return
 
-            # Convert subscriptions back into sets of tuples
-            for user in self.users.values():
-                user["subscriptions"] = {
-                    tuple(sub) for sub in user["subscriptions"]
-                }
-            # TODO P2-11
+        with open(self.filename, "r", encoding="utf-8") as f:
+            saved_state = json.load(f)
+
+        # Support the new format and your old users-only files.
+        if saved_state.get("schema_version") == 2:
+            self.users = saved_state["users"]
+
+            self.incidents = {
+                incident_id: Incident.from_dict(incident_data)
+                for incident_id, incident_data
+                in saved_state.get("incidents", {}).items()
+            }
+
+            self.status_reports = saved_state.get("status_reports", {})
+
+            self.alert_recipients = {
+                incident_id: set(names)
+                for incident_id, names
+                in saved_state.get("alert_recipients", {}).items()
+            }
+
+        else:
+            # The previous format stored users directly at the top level.
+            self.users = saved_state
+
+        # Restore subscription lists to sets of tuples.
+        for user in self.users.values():
+            user["subscriptions"] = {
+                tuple(sub) for sub in user["subscriptions"]
+            }
