@@ -6,7 +6,7 @@ from shared.protocol import ProtocolMessage, MalformedMessageError
 from shared.constants import RQGenerator, DeliveryStatus
 from shared.logger import get_logger, log_recv, log_send
 from server.server_state import ServerState
-from server import subscriptions, registration, publish, alerts
+from server import subscriptions, registration, publish, alerts, acks
 from server.retransmission import RetransmissionManager
 
 class EmergencyServer:
@@ -87,17 +87,26 @@ class EmergencyServer:
             if incident is not None:
                 alerts.distribute_alert(self.state, incident, self.send_notification)
 
-        # TODO P2-05
+        elif msg_type == "ALERT_ACK":
+            acks.handle_alert_ack(self.state, self.retransmitter, msg, addr)
+
         # TODO P2-07
         # TODO P2-08
         # TODO P2-09
 
 
     def mark_unconfirmed(self, notification):
-        """2.5. Called by the RetransmissionManager after the last attempt times out for the alert."""
+        """Called by the RetransmissionManager after the last attempt times out for the alert."""
+        incident_id = notification.payload["Incident_ID"]
+        version = notification.payload["Version"]
         with self.state.lock:
-            self.state.record_delivery(notification.payload["Incident_ID"], notification.payload["Version"],
-                                       notification.name, DeliveryStatus.UNCONFIRMED.value)
+            # A late ALERT_ACK can be processed between the give-up and this callback
+            # So we need to check if the ALERT_ACK is already confirmed, if so, ignore it.
+            current = self.state.delivery_status.get(incident_id, {}).get(notification.name)
+            if current == {"version": version, "status": DeliveryStatus.CONFIRMED.value}:
+                return
+            # record the delivery status as unconfirmed
+            self.state.record_delivery(incident_id, version, notification.name, DeliveryStatus.UNCONFIRMED.value)
 
 
     def send_response(self, addr, msg_type: str, rq_num: int, payload: dict = None):

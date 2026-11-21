@@ -5,6 +5,8 @@ import threading
 import time
 from dataclasses import dataclass
 
+from shared.constants import DeliveryStatus
+
 log = logging.getLogger("server")
 
 
@@ -29,9 +31,10 @@ class RetransmissionManager:
         self.max_random_delay = max_random_delay    # up to this many random seconds are added to each wait so notif retries don't all fire together
         self.on_unconfirmed = on_unconfirmed        # callback for unconfirmed notifications after the last attempt times out
 
-        self.pending: dict[int, PendingNotification] = {}   # RQ# -> PendingNotification
-        self.heap: list[tuple[float, int, int]] = []        # a min-heap of (deadline, rq_num, attempt) tuples
-        self.condition = threading.Condition()              # for synchronizing the scheduler thread
+        self.pending: dict[int, PendingNotification] = {}        # RQ# -> PendingNotification for retransmitting notifications
+        self.heap: list[tuple[float, int, int]] = []             # a min-heap of (deadline, rq_num, attempt) tuples for retransmitting notifications
+        self.condition = threading.Condition()                   # for synchronizing the scheduler thread
+        self.unconfirmed: dict[int, PendingNotification] = {}    # RQ# -> PendingNotification marked as unconfirmed, kept so a late ACK can still be verified
         self.running = True
         self.thread = threading.Thread(target=self._run, name="retransmission", daemon=True)
         self.thread.start()
@@ -52,10 +55,25 @@ class RetransmissionManager:
             self.condition.notify()
 
 
-    def acknowledge(self, rq_num) -> PendingNotification | None:
-        """Stops retransmitting notification and removes it from the pending list. Returns None for duplicate or late ACKs."""
+    def get_notifications(self, status: DeliveryStatus) -> dict[int, PendingNotification]:
+        """Returns the notifications for the given status."""
+        if status == DeliveryStatus.PENDING:
+            return self.pending
+        if status == DeliveryStatus.UNCONFIRMED:
+            return self.unconfirmed
+        raise ValueError(f"No notifications are kept with status {status}")
+
+
+    def peek(self, rq_num, status=DeliveryStatus.PENDING) -> PendingNotification | None:
+        """Returns the notification for rq_num without removing it so that the ACK can be verified."""
         with self.condition:
-            return self.pending.pop(rq_num, None)
+            return self.get_notifications(status).get(rq_num)
+
+
+    def acknowledge(self, rq_num, status=DeliveryStatus.PENDING) -> PendingNotification | None:
+        """Stops retransmitting notification and removes it from the pending list."""
+        with self.condition:
+            return self.get_notifications(status).pop(rq_num, None)
 
 
     def stop(self):
@@ -94,6 +112,7 @@ class RetransmissionManager:
                     resend_list.append(notification)
                 else:
                     del self.pending[rq_num]
+                    self.unconfirmed[rq_num] = notification
                     unconfirmed_list.append(notification)
 
             return resend_list, unconfirmed_list
