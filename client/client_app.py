@@ -75,10 +75,17 @@ class CENRSClient:
         msg_type = msg["type"]
         data = msg["data"]
 
-        incident_id = data["Incident_ID"]
-        version = data["Version"]
+        incident_id = data.get("Incident_ID")
+        version = data.get("Version")
+        if incident_id is None or version is None:
+            self.log.warning(f"{msg_type} (RQ: {msg['rq']}) has no Incident_ID or Version, ignored.")
+            return
 
         severity = data.get("Severity")
+
+        # send ALERT_ACK before displaying
+        if severity == "CRITICAL" or msg_type == "ALL_CLEAR":
+            self.send_alert_ack(msg["rq"], incident_id, version)
 
         alert_key = (incident_id, version)
 
@@ -94,30 +101,27 @@ class CENRSClient:
                 print("\n===== EMERGENCY ALERT =====")
                 print("Incident ID:", incident_id)
                 print("Version:", version)
-                print("Category:", data["Category"])
-                print("Location:", data["Location"])
+                print("Category:", data.get("Category"))
+                print("Location:", data.get("Location"))
                 print("Severity:", severity)
-                print("Title:", data["Title"])
-                print("Description:", data["Description"])
-                print("Attachment:", data["Attachment"])
+                print("Title:", data.get("Title"))
+                print("Description:", data.get("Description"))
+                print("Attachment:", data.get("Attachment"))
 
             elif msg_type == "ALERT_UPDATE":
                 print("\n===== ALERT UPDATE =====")
                 print("Incident ID:", incident_id)
                 print("Version:", version)
                 print("Severity:", severity)
-                print("Title:", data["Title"])
-                print("Description:", data["Description"])
+                print("Title:", data.get("Title"))
+                print("Description:", data.get("Description"))
 
             elif msg_type == "ALL_CLEAR":
                 print("\n===== ALL CLEAR =====")
                 print("Incident ID:", incident_id)
                 print("Version:", version)
-                print("Message:", data["Message"])
+                print("Message:", data.get("Message"))
 
-
-        if severity == "CRITICAL" or msg_type == "ALL_CLEAR":
-            self.send_alert_ack(msg["rq"], incident_id, version)
 
     def send_alert_ack(self, rq_num, incident_id, version):
 
