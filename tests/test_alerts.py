@@ -6,6 +6,8 @@ from tests.helpers import ServerTestCase
 
 
 def alert_data(**overrides):
+    # overrides are used to send a wrong field to test the retransmission.
+    # For example, Version=2 to send a wrong field.
     data = {"Category": "FIRE", "Location": "HALL", "Severity": "CRITICAL",
             "Title": "Fire Alarm", "Description": "Evacuate the building now",
             "Attachment": "evacuation_map.pdf"}
@@ -14,7 +16,7 @@ def alert_data(**overrides):
 
 
 class TestDistribution(unittest.TestCase):
-    """Calls the distribution code directly with a fake send function."""
+    """Test the alert distribution logic."""
 
     def setUp(self):
         tmp = tempfile.TemporaryDirectory()
@@ -36,7 +38,7 @@ class TestDistribution(unittest.TestCase):
         add("OtherPlace", "SUBSCRIBER", ("EV", "FIRE"))
         add("OtherCategory", "SUBSCRIBER", ("HALL", "POWER"))
         add("NoSubs", "SUBSCRIBER")
-        add("Publisher", "PUBLISHER", ("HALL", "FIRE"))  # can't really subscribe; must still be skipped
+        add("Publisher", "PUBLISHER", ("HALL", "FIRE")) 
 
     def fake_send(self, addr, msg_type, payload, needs_ack=False, name=None):
         self.sent.append((addr, msg_type, payload, needs_ack))
@@ -92,7 +94,7 @@ class TestDistribution(unittest.TestCase):
 
 
 class TestAlertsOverUDP(ServerTestCase):
-    """End-to-end: publish through a real server and check which subscribers receive the ALERT."""
+    """Publish an ALERT through a real server and check which subscribers receive the ALERT."""
 
     def subscriber(self, name, location, category):
         sock = self.new_client()
@@ -143,7 +145,7 @@ class TestAlertsOverUDP(ServerTestCase):
 
 
 class TestRetransmissionOverUDP(ServerTestCase):
-    """End-to-end: a subscriber that never sends ALERT_ACK gets the CRITICAL alert 3 times before listing as unconfirmed."""
+    """A subscriber that never sends ALERT_ACK gets the test critical alert 3 times before listing as unconfirmed."""
 
     server_args = ["--ack-timeout", "0.2"]
 
@@ -196,6 +198,67 @@ class TestRetransmissionOverUDP(ServerTestCase):
         self.assertEqual(len(alice_rqs), 1)  # all 3 of Alice's ALERTs share one RQ#
         self.assertEqual(len(bob_rqs), 1)
         self.assertNotEqual(alice_rqs, bob_rqs)  # each subscriber has its own RQ#
+
+
+    # =============================== ALERT_ACK (P2-05) ===============================
+
+    def ack(self, sock, alert, name, **overrides):
+        """Sends ALERT_ACK for a received ALERT. Pass overrides to send a wrong field."""
+        data = {"Incident_ID": alert["data"]["Incident_ID"], "Version": alert["data"]["Version"], "Name": name}
+        data.update(overrides)
+        self.send(sock, "ALERT_ACK", alert["rq"], data)
+
+    def test_ack_stops_retransmission(self):
+        alice = self.subscriber("Alice", "HALL", "FIRE")
+        self.publish()
+        alert = self.receive(alice)
+        self.ack(alice, alert, "Alice")
+        self.assert_nothing_received(alice)
+
+    def test_ack_with_wrong_version(self):
+        alice = self.subscriber("Alice", "HALL", "FIRE")
+        self.publish()
+        alert = self.receive(alice)
+        self.ack(alice, alert, "Alice", Version=2)
+        next_alert = self.receive(alice)  # the server is still retransmitting
+        self.assertEqual(next_alert["rq"], alert["rq"])
+
+    def test_ack_with_wrong_name(self):
+        alice = self.subscriber("Alice", "HALL", "FIRE")
+        self.publish()
+        alert = self.receive(alice)
+        self.ack(alice, alert, "Bob")
+        next_alert = self.receive(alice)
+        self.assertEqual(next_alert["rq"], alert["rq"])
+
+    def test_ack_from_other_address(self):
+        alice = self.subscriber("Alice", "HALL", "FIRE")
+        self.publish()
+        alert = self.receive(alice)
+        other = self.new_client()
+        self.ack(other, alert, "Alice")
+        next_alert = self.receive(alice)
+        self.assertEqual(next_alert["rq"], alert["rq"])
+
+    def test_malformed_ack(self):
+        alice = self.subscriber("Alice", "HALL", "FIRE")
+        self.publish()
+        alert = self.receive(alice)
+        self.ack(alice, alert, "Alice", Version="1")
+        next_alert = self.receive(alice)
+        self.assertEqual(next_alert["rq"], alert["rq"])
+
+    def test_duplicate_ack(self):
+        alice = self.subscriber("Alice", "HALL", "FIRE")
+        self.publish()
+        alert = self.receive(alice)
+        self.ack(alice, alert, "Alice")
+        self.ack(alice, alert, "Alice")
+        self.assert_nothing_received(alice)
+
+        bob = self.new_client()
+        reply = self.register(bob, "Bob")  # the server still works
+        self.assertEqual(reply["type"], "REGISTERED")
 
 
 if __name__ == "__main__":
