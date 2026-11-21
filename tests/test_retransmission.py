@@ -1,6 +1,7 @@
 import threading, time, unittest
 
 from server.retransmission import RetransmissionManager
+from shared.constants import DeliveryStatus
 
 ADDRESS = ("127.0.0.1", 5999)
 PAYLOAD = {"Incident_ID": "INC001", "Version": 1}
@@ -72,10 +73,19 @@ class TestRetransmissionManager(unittest.TestCase):
         self.assertIsNotNone(self.manager.acknowledge(1))
         self.assertIsNone(self.manager.acknowledge(1))
 
+    def test_peek_does_not_remove(self):
+        self.manager.track(1, ADDRESS, "ALERT", PAYLOAD, "Alice")
+        self.assertEqual(self.manager.peek(1).name, "Alice")
+        self.assertIn(1, self.manager.pending)
+        self.assertIsNone(self.manager.peek(2))
+
     def test_late_ack_after_unconfirmed(self):
         self.manager.track(1, ADDRESS, "ALERT", PAYLOAD, "Alice")
         self.wait_for_length(self.unconfirmed, 1)
         self.assertIsNone(self.manager.acknowledge(1))
+        self.assertEqual(self.manager.peek(1, DeliveryStatus.UNCONFIRMED).name, "Alice")  # kept for the late ACK
+        self.assertIsNotNone(self.manager.acknowledge(1, DeliveryStatus.UNCONFIRMED))
+        self.assertIsNone(self.manager.peek(1, DeliveryStatus.UNCONFIRMED))  # a second late ACK is a duplicate
 
     def test_wait_time_doubles_each_attempt(self):
         self.assertAlmostEqual(self.manager._wait_for(1), TIMEOUT)

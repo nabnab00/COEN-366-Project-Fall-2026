@@ -56,7 +56,7 @@ class RetransmissionManager:
 
 
     def get_notifications(self, status: DeliveryStatus) -> dict[int, PendingNotification]:
-        """Returns the notifications for the given status."""
+        """Returns the notifications for the given status. Caller must hold self.condition."""
         if status == DeliveryStatus.PENDING:
             return self.pending
         if status == DeliveryStatus.UNCONFIRMED:
@@ -71,7 +71,8 @@ class RetransmissionManager:
 
 
     def acknowledge(self, rq_num, status=DeliveryStatus.PENDING) -> PendingNotification | None:
-        """Stops retransmitting notification and removes it from the pending list."""
+        """Stops retransmitting pending notifications and removes it from the pending list. 
+        For unconfirmed status, deletes the notification copy kept for verifying late ACKs."""
         with self.condition:
             return self.get_notifications(status).pop(rq_num, None)
 
