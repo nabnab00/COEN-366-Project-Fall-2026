@@ -124,7 +124,7 @@ class EmergencyServer:
         if needs_ack:
             with self.state.lock:
                 self.state.record_delivery(payload["Incident_ID"], payload["Version"], name, DeliveryStatus.PENDING.value)
-                # TODO P2-11: save delivery_status here
+            # TODO P2-11: save delivery_status here
             self.retransmitter.track(rq_num, addr, msg_type, payload, name)
         self.send_response(addr, msg_type, rq_num, payload)
         return rq_num
