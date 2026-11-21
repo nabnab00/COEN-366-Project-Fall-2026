@@ -54,7 +54,7 @@ def handle_alert_ack(state, retransmitter, msg, addr):
         return
 
     confirm(state, notification)
-    log.info(f"STATE  [ALERT_ACK] {data['Incident_ID']} v{data['Version']} received andconfirmed by {notification.name} (rq={rq_num})")
+    log.info(f"STATE  [ALERT_ACK] {data['Incident_ID']} v{data['Version']} received and confirmed by {notification.name} (rq={rq_num})")
 
 
 def handle_late_ack(state, retransmitter, rq_num, data, addr):
