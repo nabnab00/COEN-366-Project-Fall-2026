@@ -103,6 +103,18 @@ class TestMarkUnconfirmed(unittest.TestCase):
         self.assertEqual(self.state.delivery_status["INC001"]["Alice"],
                          {"version": 2, "status": "UNCONFIRMED"})
 
+    def test_old_version_giving_up_does_not_overwrite_newer_version(self):
+        self.state.record_delivery("INC001", 2, "Alice", "PENDING")  # an ALERT_UPDATE (v2) was sent
+        EmergencyServer.mark_unconfirmed(self.fake_server, self.notification)  # v1 gives up afterwards
+        self.assertEqual(self.state.delivery_status["INC001"]["Alice"],
+                         {"version": 2, "status": "PENDING"})
+
+    def test_late_ack_for_old_version_does_not_overwrite_newer_version(self):
+        self.state.record_delivery("INC001", 2, "Alice", "PENDING")
+        acks.confirm(self.state, self.notification)  # late ACK for v1
+        self.assertEqual(self.state.delivery_status["INC001"]["Alice"],
+                         {"version": 2, "status": "PENDING"})
+
 
 if __name__ == "__main__":
     unittest.main()
