@@ -107,6 +107,7 @@ class EmergencyServer:
                 return
             # record the delivery status as unconfirmed
             self.state.record_delivery(incident_id, version, notification.name, DeliveryStatus.UNCONFIRMED.value)
+        # TODO P2-11: save delivery_status here
 
 
     def send_response(self, addr, msg_type: str, rq_num: int, payload: dict = None):
@@ -117,10 +118,13 @@ class EmergencyServer:
 
     def send_notification(self, addr, msg_type: str, payload: dict, needs_ack: bool = False, name: str = None) -> int:
         """2.4. Server-initiated message (ALERT, ALERT_UPDATE, ALL_CLEAR) with a new RQ#. Returns the RQ#."""
+        # TODO P2-07: send ALERT_UPDATE with send_notification(addr, "ALERT_UPDATE", payload, ...)
+        # TODO P2-08: send ALL_CLEAR with send_notification(addr, "ALL_CLEAR", payload, ...)
         rq_num = self.rq_gen.get_next()
         if needs_ack:
             with self.state.lock:
                 self.state.record_delivery(payload["Incident_ID"], payload["Version"], name, DeliveryStatus.PENDING.value)
+                # TODO P2-11: save delivery_status here
             self.retransmitter.track(rq_num, addr, msg_type, payload, name)
         self.send_response(addr, msg_type, rq_num, payload)
         return rq_num

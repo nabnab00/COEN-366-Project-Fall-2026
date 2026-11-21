@@ -27,6 +27,7 @@ def confirm(state, notification):
     with state.lock:
         state.record_delivery(notification.payload["Incident_ID"], notification.payload["Version"],
                               notification.name, DeliveryStatus.CONFIRMED.value)
+    # TODO P2-11: save delivery_status here
 
 
 def handle_alert_ack(state, retransmitter, msg, addr):
