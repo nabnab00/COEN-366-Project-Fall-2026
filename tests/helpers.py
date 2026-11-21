@@ -24,7 +24,7 @@ class ServerTestCase(unittest.TestCase):
             [sys.executable, "-m", "server.emergency_server", str(PORT), "state.json"],
             cwd=self.folder, # state file and logs/ go in the temp folder
             env={**os.environ, "PYTHONPATH": REPO}, # so "server" and "shared" can be imported
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            stdout=None, stderr=None,
         )
         time.sleep(0.5) # give it time to bind the port
 
@@ -74,6 +74,16 @@ class ServerTestCase(unittest.TestCase):
 
     # =============================== HELPER FUNCTIONS ===============================
     # get the saved state from the server
+    # return only users.
     def saved_state(self):
+        data = self.saved_full_state()
+
+        if data.get("schema_version") == 2:
+            return data["users"]
+
+        return data
+
+    # Used by new tests: return the entire saved file.
+    def saved_full_state(self):
         with open(os.path.join(self.folder, STATE_FILE)) as f:
             return json.load(f)

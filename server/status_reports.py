@@ -1,10 +1,12 @@
 import logging
 
-from shared.constants import Status
+from shared.constants import Role, Status
 
 log = logging.getLogger("server")
 
 VALID_STATUSES = {status.value for status in Status}
+
+SUBSCRIBER_ROLES = {Role.SUBSCRIBER.value, Role.BOTH.value}
 
 
 def handle_status_report(state, msg, addr, send_response, persist=None):
@@ -39,6 +41,9 @@ def handle_status_report(state, msg, addr, send_response, persist=None):
 
             elif sender_name != name:
                 error = "Endpoint_Mismatch"
+
+            elif state.users[name]["role"] not in SUBSCRIBER_ROLES:
+                error = "Unauthorized_Role"
 
             elif incident is None:
                 error = "Unknown_Incident"

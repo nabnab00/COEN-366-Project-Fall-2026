@@ -79,6 +79,10 @@ class EmergencyServer:
                 persist=self.state.save_to_file
             )
 
+            if incident is not None:
+                     alerts.distribute_alert(self.state, incident, self.send_notification)
+     
+ 
         elif msg_type == "STATUS_REPORT":
             status_reports.handle_status_report(
                 self.state,
@@ -98,9 +102,7 @@ class EmergencyServer:
                 persist=self.state.save_to_file,
             )
 
-            if incident is not None:
-                alerts.distribute_alert(self.state, incident, self.send_notification)
-
+            
         # TODO P2-05
       
         # TODO P2-08
