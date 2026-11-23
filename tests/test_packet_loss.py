@@ -46,11 +46,11 @@ class TestLostAcks(ServerTestCase):
         for name in names:
             self.receive_and_ack(subscribers[name], name)
 
-        # several retransmission timers are runnow now, other requests must still be answered
+        # several retransmission timers are running now, other requests must still be answered
         dave = self.new_client()
         self.assertEqual(self.register(dave, "Dave")["type"], "REGISTERED")
 
         for name in names:
             # each subscriber still gets its own 2 retransmissions
             for _ in range(2):
-                self.receive_and_ack(subscribers[name], name )
+                self.receive_and_ack(subscribers[name], name)
