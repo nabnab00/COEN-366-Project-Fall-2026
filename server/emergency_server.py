@@ -2,6 +2,7 @@ import socket
 import threading
 import json
 import argparse
+import random
 from shared.protocol import ProtocolMessage, MalformedMessageError
 from shared.constants import RQGenerator, DeliveryStatus
 from shared.logger import get_logger, log_recv, log_send
@@ -11,7 +12,7 @@ from server.retransmission import RetransmissionManager
 
 class EmergencyServer:
     
-    def __init__(self, host='127.0.0.1', port=5000, state_file="server_state.json", ack_timeout=2.0):
+    def __init__(self, host='127.0.0.1', port=5000, state_file="server_state.json", ack_timeout=2.0, drop_rate=0.0):
         self.host = host
         self.port = port
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -26,6 +27,7 @@ class EmergencyServer:
             base_timeout=ack_timeout,
             on_unconfirmed=self.mark_unconfirmed
         )
+        self.drop_rate = drop_rate # set drop rate for simulated packet loss
 
     def handle_client(self, data: bytes, addr):
         """Worker thread logic for processing incoming messages."""
@@ -33,6 +35,11 @@ class EmergencyServer:
             msg = ProtocolMessage.decode(data)
         except MalformedMessageError as e:
             self.log.warning(f"[{addr}] Error: {e}")
+            return
+
+        # simulated packet loss, the ACK is treated as if it never arrived
+        if msg["type"] == "ALERT_ACK" and random.random() < self.drop_rate:
+            self.log.warning(f"[{addr}] DROPPED ALERT_ACK rq={msg['rq']} (simulated packet loss)")
             return
 
         log_recv(self.log, addr, msg['type'], msg['rq'], msg['data'])        
@@ -141,7 +148,12 @@ if __name__ == "__main__":
     parser.add_argument("port", nargs="?", type=int, default=5000, help="UDP port to listen on (default: 5000")
     parser.add_argument("state_file", nargs="?", default="server_state.json", help="file used to save and restore server state")
     parser.add_argument("--ack-timeout", type=float, default=2.0, help="seconds to wait for the first ALERT_ACK; doubles on each retry (default: 2.0)")
-    # TODO P2-12
+    parser.add_argument("--drop-rate", type=float, default=0.0, help="chance (0 to 1) of ignoring a received ALERT_ACK, to simulate packet loss (default: 0.0)")
     args = parser.parse_args()
-    server = EmergencyServer(port=args.port, state_file=args.state_file, ack_timeout=args.ack_timeout)
+
+    # validate drop rate
+    if not 0 <= args.drop_rate <= 1:
+        parser.error("drop-rate must be between 0 and 1")
+
+    server = EmergencyServer(port=args.port, state_file=args.state_file, ack_timeout=args.ack_timeout, drop_rate=args.drop_rate)
     server.listen()
