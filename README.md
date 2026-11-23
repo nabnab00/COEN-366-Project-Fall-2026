@@ -329,6 +329,8 @@ Run the tests **before every push / pull request**.
 | `tests/test_retransmission.py` | RetransmissionManager: retry timing, same RQ#, giving up after 3 attempts, many timers on one thread (unit tests, no server process) |
 | `tests/test_acks.py` | ALERT_ACK handling and delivery status: in-time and late ACKs, wrong late ACKs, older versions not overwriting newer ones (unit tests, no server process) |
 | `tests/test_incidents.py` | Incident model, version and status changes, and unique Incident_IDs (unit tests, no server process) |
+| `tests/test_packet_loss.py` | simulated packet loss (`--drop-rate`): lost ACKs cause 3 copies then UNCONFIRMED, and the server keeps answering other clients meanwhile |
+
 
 ### Adding a test
 Add a method whose name starts with `test_` to a class that inherits from `ServerTestCase`:
