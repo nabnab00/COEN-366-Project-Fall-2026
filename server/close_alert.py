@@ -15,11 +15,13 @@ def handle_close_alert(state, msg, addr, send_response, send_notification, persi
         incident = state.get_incident(incident_id)
 
         if not incident_id or not reason:
-            error = "Malformed request"
+            error = "Malformed_Request"
         elif name is None:
-            error = "Not registered"
+            error = "Not_Registered"
         elif user["role"] == "SUBSCRIBER":
             error = "Unauthorized_Role"
+        elif incident is None:
+            error = "Unknown_Incident"
         elif not incident.is_active:
             error = "Incident_Closed"
         elif incident.publisher != name:
