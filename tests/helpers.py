@@ -26,7 +26,7 @@ class ServerTestCase(unittest.TestCase):
             [sys.executable, "-m", "server.emergency_server", str(PORT), "state.json", *self.server_args],
             cwd=self.folder, # state file and logs/ go in the temp folder
             env={**os.environ, "PYTHONPATH": REPO}, # so "server" and "shared" can be imported
-            stdout=None, stderr=None,
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
         )
         time.sleep(0.5) # give it time to bind the port
 
