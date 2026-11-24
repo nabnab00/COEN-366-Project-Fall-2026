@@ -127,7 +127,6 @@ class EmergencyServer:
                 return
             # record the delivery status as unconfirmed
             self.state.record_delivery(incident_id, version, notification.name, DeliveryStatus.UNCONFIRMED.value)
-        # TODO P2-11: save delivery_status here
         self.state.save_to_file()
 
 
