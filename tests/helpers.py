@@ -10,6 +10,8 @@ STATE_FILE = "server_states/state.json" # ServerState puts the file inside serve
 class ServerTestCase(unittest.TestCase):
     """Each test gets a fresh server with an empty state file in a temporary folder."""
 
+    server_args = []  # extra command-line arguments for the server, e.g. ["--ack-timeout", "0.2"]
+
     def setUp(self):
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
@@ -21,7 +23,7 @@ class ServerTestCase(unittest.TestCase):
     # =============================== SERVER CONTROL ===============================
     def start_server(self):
         self.server = subprocess.Popen(
-            [sys.executable, "-m", "server.emergency_server", str(PORT), "state.json"],
+            [sys.executable, "-m", "server.emergency_server", str(PORT), "state.json", *self.server_args],
             cwd=self.folder, # state file and logs/ go in the temp folder
             env={**os.environ, "PYTHONPATH": REPO}, # so "server" and "shared" can be imported
             stdout=None, stderr=None,

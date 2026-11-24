@@ -30,6 +30,7 @@ class CENRSClient:
         self.pending = {}                 # rq_num -> (msg_type, payload) of requests waiting for a server reply
         self.lock = threading.Lock()      # guards subscriptions and pending lists
         self.log.info(f"Client initialized. Listening on UDP port {self.local_udp_port}")
+        self.seen_alerts = set()
 
 
     def listen_for_alerts(self):
@@ -62,9 +63,129 @@ class CENRSClient:
         elif msg_type in ("SUBSCRIBED", "SUBSCRIPTION-DENIED", "UNSUBSCRIBED", "UNSUBSCRIPTION-DENIED"):
             self.handle_subscription_reply(msg)
         # TODO P2-06
+        elif msg_type in ("ALERT", "ALERT_UPDATE", "ALL_CLEAR"):
+            self.handle_alert(msg)
         # TODO P2-10
+        elif msg_type in ("ALERT_ACCEPTED","ALERT_DENIED","ALERT_UPDATED","ALERT_CLOSED","STATUS_RECORDED","STATUS_REJECTED"):
+            self.handle_incident_reply(msg)
         else:
             self.log.warning(f"Unknown message type: {msg_type!r} (RQ: {msg['rq']}), ignored.")
+
+    def handle_alert(self, msg: dict):
+        msg_type = msg["type"]
+        data = msg["data"]
+
+        incident_id = data.get("Incident_ID")
+        version = data.get("Version")
+        if incident_id is None or version is None:
+            self.log.warning(f"{msg_type} (RQ: {msg['rq']}) has no Incident_ID or Version, ignored.")
+            return
+
+        severity = data.get("Severity")
+
+        # send ALERT_ACK before displaying
+        if severity == "CRITICAL" or msg_type == "ALL_CLEAR":
+            self.send_alert_ack(msg["rq"], incident_id, version)
+
+        alert_key = (incident_id, version)
+
+        with self.lock:
+            duplicate = alert_key in self.seen_alerts
+
+            if not duplicate:
+                self.seen_alerts.add(alert_key)
+
+        if not duplicate:
+
+            if msg_type == "ALERT":
+                print("\n===== EMERGENCY ALERT =====")
+                print("Incident ID:", incident_id)
+                print("Version:", version)
+                print("Category:", data.get("Category"))
+                print("Location:", data.get("Location"))
+                print("Severity:", severity)
+                print("Title:", data.get("Title"))
+                print("Description:", data.get("Description"))
+                print("Attachment:", data.get("Attachment"))
+
+            elif msg_type == "ALERT_UPDATE":
+                print("\n===== ALERT UPDATE =====")
+                print("Incident ID:", incident_id)
+                print("Version:", version)
+                print("Severity:", severity)
+                print("Title:", data.get("Title"))
+                print("Description:", data.get("Description"))
+
+            elif msg_type == "ALL_CLEAR":
+                print("\n===== ALL CLEAR =====")
+                print("Incident ID:", incident_id)
+                print("Version:", version)
+                print("Message:", data.get("Message"))
+
+
+    def send_alert_ack(self, rq_num, incident_id, version):
+
+        payload = {
+            "Incident_ID": incident_id,
+            "Version": version,
+            "Name": self.name
+        }
+
+        data = ProtocolMessage.encode(
+            "ALERT_ACK",
+            rq_num,
+            payload
+        )
+
+        self.sock.sendto(data, self.server_addr)
+
+        log_send(
+        self.log,
+        self.server_addr,
+        "ALERT_ACK",
+        rq_num,
+        payload
+        )
+
+        print(f"Sent ALERT_ACK (RQ: {rq_num})")
+        
+
+    def handle_incident_reply(self, msg: dict):
+        
+        msg_type = msg["type"]
+        rq_num = msg["rq"]
+        data = msg["data"]
+
+        with self.lock:
+            pending_request = self.pending.pop(rq_num, None)
+
+            if pending_request is None:
+                print("No matching pending request.")
+                return
+
+        if msg_type == "ALERT_ACCEPTED":
+            print("Alert published successfully.")
+            print("Incident ID:", data["Incident_ID"])
+
+        elif msg_type == "ALERT_UPDATED":
+            # TODO: Display incident ID and version
+            print("Alert updated successfully.")
+            print("Incident ID:", data["Incident_ID"])
+            print("Version:", data["Version"])
+
+        elif msg_type == "ALERT_CLOSED":
+            # TODO: Display confirmation
+            print("Alert closed successfully.")
+            print("Incident ID:", data["Incident_ID"])
+
+        elif msg_type == "STATUS_RECORDED":
+            # TODO: Display confirmation
+            print("Status report recorded successfully.")
+
+        else:
+            # TODO: Display the denial reason
+            print("Request denied:", data.get("Reason"))
+        
 
     def handle_registration_reply(self, msg: dict):
         """Handles registration-related replies from the server."""
@@ -111,6 +232,7 @@ class CENRSClient:
                 self.name = None
                 self.role = None
                 self.subscriptions.clear()
+                self.seen_alerts.clear()
 
                 self.pending = {
                     rq: request
@@ -231,6 +353,77 @@ class CENRSClient:
             print(f" - {location} / {category}")
 
     # TODO P2-10
+    def publish_alert(self, category, location, severity, title, description, attachment="NONE"):
+            if self.name is None:
+                print("You must register first.")
+                return
+
+            if self.role not in ("PUBLISHER", "BOTH"):
+                print("You must be a publisher to publish alerts.")
+                return
+
+            self.send_message("PUBLISH_ALERT", {
+                "Category": category.strip().upper(),
+                "Location": location.strip().upper(),
+                "Severity": severity.strip().upper(),
+                "Title": title.strip(),
+                "Description": description.strip(),
+                "Attachment": attachment.strip() or "NONE"  
+                })
+
+    def update_alert(self, incident_id, severity, title, description):
+
+        # TODO: Check whether the client is registered
+        if self.name is None:
+            print("You must register first.")
+            return
+
+        # TODO: Check whether the client can publish
+        if self.role not in ("PUBLISHER", "BOTH"):
+            print("You must be a publisher to update alerts.")
+            return
+
+        self.send_message("UPDATE_ALERT", {
+            "Incident_ID":incident_id.strip().upper() ,
+            "Severity": severity.strip().upper(),
+            "Title": title.strip() ,
+            "Description": description.strip() 
+        })
+
+    def close_alert(self, incident_id, reason):
+
+        # TODO: Check registration
+        if self.name is None:
+            print('You must register first')
+            return
+
+        # TODO: Check publisher role
+        if self.role not in ("PUBLISHER", "BOTH"):
+            print("You must be a publisher to close alerts.")
+            return
+
+        self.send_message("CLOSE_ALERT", {
+            "Incident_ID":incident_id.strip().upper(),
+            "Reason": reason.strip()
+        })
+
+    def status_report(self, incident_id, status):
+
+        # TODO: Check registration
+        if self.name is None:
+            print('You must register first')
+            return
+
+        # TODO: Check for SUBSCRIBER or BOTH role
+        if self.role not in ("SUBSCRIBER", "BOTH"):
+            print("You must be a subscriber to send status reports.")
+            return
+
+        self.send_message("STATUS_REPORT", {
+            "Incident_ID": incident_id.strip().upper(),
+            "Name": self.name.strip(),
+            "Status": status.strip().upper()
+        })
 
     # Helper functions to save client profile locally
     def save_profile(self):

@@ -27,8 +27,8 @@ def distribute_alert(state, incident, send_notification) -> list[str]:
 
     # 2.5: CRITICAL alerts need an ALERT_ACK (P2-04)
     needs_ack = payload["Severity"] == Severity.CRITICAL.value
-    for _, addr in recipients:
-        send_notification(addr, "ALERT", payload, needs_ack=needs_ack)
+    for name, addr in recipients:
+        send_notification(addr, "ALERT", payload, needs_ack=needs_ack, name=name)
 
     names = [name for name, _ in recipients]
     log.info(f"STATE  [ALERT] {payload['Incident_ID']} v{payload['Version']} sent to "

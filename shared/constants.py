@@ -32,6 +32,11 @@ class IncidentStatus(Enum):
     ACTIVE = "ACTIVE"
     CLOSED = "CLOSED"
 
+class DeliveryStatus(Enum):
+    PENDING = "PENDING"
+    CONFIRMED = "CONFIRMED"
+    UNCONFIRMED = "UNCONFIRMED"
+
 class Status(Enum):
     SAFE = "SAFE"
     NEED_HELP = "NEED_HELP"

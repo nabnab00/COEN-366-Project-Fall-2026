@@ -216,7 +216,15 @@ Sent right after `ALERT_ACCEPTED`. Payload: `Incident_ID`, `Version`, `Category`
 - **Who receives it:** every registered SUBSCRIBER or BOTH client with a matching subscription, using the `ALL` wildcard (`matches()` in `subscriptions.py`). A BOTH publisher subscribed to its own location receives its own alert.
 - **RQ#:** each ALERT gets a new RQ# from the server's generator, so every recipient sees a different RQ# for the same Incident_ID and Version.
 - **Recipients are recorded** in `ServerState.alert_recipients`, so ALL_CLEAR (P2-08) can reach everyone who was sent the incident.
-- **Reliability:** CRITICAL alerts are sent with `needs_ack=True` through `EmergencyServer.send_notification`. The ACK timer and retransmission are added there in P2-04.
+- **Reliability:** CRITICAL alerts are sent with `needs_ack=True` through `EmergencyServer.send_notification`. With no `ALERT_ACK`, the server resends the same ALERT with the same RQ#, up to 3 transmissions in total. It waits about 2 s after the 1st transmission, 4 s after the 2nd and 8 s after the 3rd (`--ack-timeout` sets the first wait; each wait doubles), then marks the subscriber UNCONFIRMED.
+
+### ALERT_ACK
+Sent by a subscriber for each CRITICAL ALERT, CRITICAL ALERT_UPDATE and every ALL_CLEAR, with the same RQ# as the message it answers. Payload: `Incident_ID`, `Version`, `Name`. The server sends no reply.
+
+- **Accepted** only if it comes from the address the ALERT was sent to and `Name`, `Incident_ID` and `Version` all match. The subscriber becomes CONFIRMED and retransmission stops.
+- **Ignored** if it is malformed or does not match; retransmission continues.
+- **Late ACKs** (after the server gave up) still turn UNCONFIRMED back into CONFIRMED. A repeated ACK is logged as a duplicate and ignored.
+- **Delivery status** is kept per subscriber and incident in `ServerState.delivery_status` (PENDING, CONFIRMED or UNCONFIRMED).
 
 ## Logging
 
@@ -317,7 +325,9 @@ Run the tests **before every push / pull request**.
 | `tests/test_subscriptions.py` | SUBSCRIBE, UNSUBSCRIBE, and wildcard matching |
 | `tests/test_persistence.py` | recovery after a crash, and concurrent clients |
 | `tests/test_publish.py` | PUBLISH_ALERT: who may publish, every denial reason, unique IDs under concurrent publishes, and the reply over UDP |
-| `tests/test_alerts.py` | ALERT distribution: wildcard matching, roles, CRITICAL needs an ACK, and which clients receive it over UDP |
+| `tests/test_alerts.py` | ALERT distribution: notification matching, roles, CRITICAL needs an ACK, and which clients receive it over UDP; retransmission and ALERT_ACK (accepted, ignored, duplicate) over UDP |
+| `tests/test_retransmission.py` | RetransmissionManager: retry timing, same RQ#, giving up after 3 attempts, many timers on one thread (unit tests, no server process) |
+| `tests/test_acks.py` | ALERT_ACK handling and delivery status: in-time and late ACKs, wrong late ACKs, older versions not overwriting newer ones (unit tests, no server process) |
 | `tests/test_incidents.py` | Incident model, version and status changes, and unique Incident_IDs (unit tests, no server process) |
 
 ### Adding a test

@@ -12,6 +12,9 @@ class ServerState:
         self.incident_ids = IncidentIDGenerator()
         self.alert_recipients = {}  # Incident_ID -> names that were sent the incident (ALL_CLEAR goes to them, 2.7)
         self.status_reports = {}  # incident ID -> {client name: latest status}
+        self.delivery_status = {}   # Incident_ID -> {name: {"version": int, "status": PENDING/CONFIRMED/UNCONFIRMED}} (2.5)
+        # TODO P2-11: save and restore delivery_status. It is written by send_notification (PENDING), acks.confirm (CONFIRMED)
+        #             and mark_unconfirmed (UNCONFIRMED).
         self.lock = threading.Lock()
         self.filename = "server_states/" + filename
 
@@ -46,6 +49,14 @@ class ServerState:
 
     def get_incident(self, incident_id) -> Incident | None:
         return self.incidents.get(incident_id)
+
+    def record_delivery(self, incident_id, version, name, status):
+        """Caller must hold self.lock. Ignored if a newer version of ALERT is already recorded for this subscriber."""
+        current = self.delivery_status.get(incident_id, {}).get(name)
+        # An older version can still be retrying (or get a late ACK) after an ALERT_UPDATE was sent
+        if current is not None and current["version"] > version:
+            return
+        self.delivery_status.setdefault(incident_id, {})[name] = {"version": version, "status": status}
 
     def save_to_file(self):
         with self.lock:
