@@ -13,8 +13,6 @@ class ServerState:
         self.alert_recipients = {}  # Incident_ID -> names that were sent the incident (ALL_CLEAR goes to them, 2.7)
         self.status_reports = {}  # incident ID -> {client name: latest status}
         self.delivery_status = {}   # Incident_ID -> {name: {"version": int, "status": PENDING/CONFIRMED/UNCONFIRMED}} (2.5)
-        # TODO P2-11: save and restore delivery_status. It is written by send_notification (PENDING), acks.confirm (CONFIRMED)
-        #             and mark_unconfirmed (UNCONFIRMED).
         self.lock = threading.Lock()
         self.filename = "server_states/" + filename
 
@@ -81,6 +79,8 @@ class ServerState:
 
                 "status_reports": self.status_reports,
 
+                "delivery_status": self.delivery_status,
+
                 # Convert recipient sets into lists.
                 "alert_recipients": {
                     incident_id: list(names)
@@ -118,6 +118,8 @@ class ServerState:
             }
 
             self.status_reports = saved_state.get("status_reports", {})
+
+            self.delivery_status = saved_state.get("delivery_status", {})
 
             self.alert_recipients = {
                 incident_id: set(names)
