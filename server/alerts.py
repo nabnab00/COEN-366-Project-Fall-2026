@@ -156,12 +156,13 @@ def handle_update_alert(
     # 6. Send the update to matching subscribers.
     needs_ack = payload["Severity"] == Severity.CRITICAL.value
 
-    for _, subscriber_addr in recipients:
+    for subscriber_name, subscriber_addr in recipients:
         send_notification(
             subscriber_addr,
             "ALERT_UPDATE",
             payload,
             needs_ack=needs_ack,
+            name=subscriber_name,
         )
 
     log.info(
