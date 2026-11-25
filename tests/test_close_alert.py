@@ -69,3 +69,54 @@ class TestCloseAlert(ServerTestCase):
     def test_unknown_incident(self):
         reply = self.request(self.publisher, "CLOSE_ALERT", 81, {"Incident_ID": "unknown", "Reason": "Test"})
         self.assertEqual(reply["data"]["Reason"], "Unknown_Incident")
+
+    def test_malformed_request(self):
+        bad_payloads = {
+            "missing Reason": {"Incident_ID": self.incident_id},
+            "missing Incident_ID": {"Reason": "Building_Reopened"},
+            "empty Reason": {"Incident_ID": self.incident_id, "Reason": ""},
+            "Incident_ID is a list": {"Incident_ID": [self.incident_id], "Reason": "Building_Reopened"},
+            "Reason is a number": {"Incident_ID": self.incident_id, "Reason": 5},
+        }
+        for case, data in bad_payloads.items():
+            with self.subTest(case):
+                reply = self.request(self.publisher, "CLOSE_ALERT", 81, data)
+                self.assertEqual(reply["type"], "ALERT_DENIED")
+                self.assertEqual(reply["data"]["Reason"], "Malformed_Request")
+
+        # the server is still running and the incident is still open
+        self.assertEqual(self.close(self.publisher)["type"], "ALERT_CLOSED")
+
+    def test_both_role_can_close_own_incident(self):
+        facilities = self.new_client()
+        self.register(facilities, "Facilities", "BOTH", tcp_port=7002)
+        reply = self.request(facilities, "PUBLISH_ALERT", 45, alert_data(Severity="INFO", Title="Power Outage"))
+        incident_id = reply["data"]["Incident_ID"]
+        self.receive(self.alice) # the ALERT for Facilities' incident
+
+        reply = self.request(facilities, "CLOSE_ALERT", 81, {"Incident_ID": incident_id, "Reason": "Power_Restored"})
+        self.assertEqual(reply["type"], "ALERT_CLOSED")
+        self.assertEqual(reply["data"]["Incident_ID"], incident_id)
+        self.assertEqual(self.receive(self.alice)["type"], "ALL_CLEAR")
+
+    def test_subscriber_who_got_alert_and_is_still_subscribed_gets_one_all_clear(self):
+        # Alice is both an alert recipient and a current subscriber, so she must not get two separate ALL_CLEARs
+        self.close(self.publisher)
+        self.alice.settimeout(2)
+        messages = []
+        try:
+            while True:
+                messages.append(self.receive(self.alice))
+        except socket.timeout:
+            pass
+
+        self.assertTrue(messages)
+        self.assertTrue(all(m["type"] == "ALL_CLEAR" for m in messages))
+        # retransmissions reuse the same RQ#, so one notification means one RQ#
+        self.assertEqual(len({m["rq"] for m in messages}), 1)
+
+    def test_unregistered_client_cannot_close(self):
+        stranger = self.new_client()
+        reply = self.close(stranger)
+        self.assertEqual(reply["type"], "ALERT_DENIED")
+        self.assertEqual(reply["data"]["Reason"], "Not_Registered")
