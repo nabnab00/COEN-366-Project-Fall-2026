@@ -229,6 +229,13 @@ Sent by a subscriber for each CRITICAL ALERT, CRITICAL ALERT_UPDATE and every AL
 - **Late ACKs** (after the server gave up) still turn UNCONFIRMED back into CONFIRMED. A repeated ACK is logged as a duplicate and ignored.
 - **Delivery status** is kept per subscriber and incident in `ServerState.delivery_status` (PENDING, CONFIRMED or UNCONFIRMED).
 
+### CLOSE_ALERT / ALL_CLEAR
+Sent by the publisher that created the incident. Payload: `Incident_ID`, `Reason`.
+
+- The incident becomes CLOSED and its Version goes up by 1. The server replies `ALERT_CLOSED`, then sends `ALL_CLEAR` (`Incident_ID`, `Version`, `Message` = the `Reason`) to everyone who got the alert plus everyone subscribed to it now.
+- ALL_CLEAR always needs an `ALERT_ACK` and is retransmitted like a CRITICAL alert.
+- Denied with `ALERT_DENIED`: `Malformed_Request`, `Not_Registered`, `Unauthorized_Role`, `Unknown_Incident`, `Incident_Closed`, `Not_Incident_Publisher`.
+
 ## Logging
 
 The spec requires that the marker can see every message sent and received, plus progress and failures.
@@ -333,6 +340,7 @@ Run the tests **before every push / pull request**.
 | `tests/test_acks.py` | ALERT_ACK handling and delivery status: in-time and late ACKs, wrong late ACKs, older versions not overwriting newer ones (unit tests, no server process) |
 | `tests/test_incidents.py` | Incident model, version and status changes, and unique Incident_IDs (unit tests, no server process) |
 | `tests/test_packet_loss.py` | simulated packet loss (`--drop-rate`): lost ACKs cause 3 copies then UNCONFIRMED, and the server keeps answering other clients meanwhile |
+| `tests/test_close_alert.py` | CLOSE_ALERT: ALL_CLEAR to old and new subscribers, retransmission and ACK, closing twice, wrong publisher, unknown incident |
 
 
 ### Adding a test

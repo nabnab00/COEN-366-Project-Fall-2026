@@ -7,7 +7,7 @@ from shared.protocol import ProtocolMessage, MalformedMessageError
 from shared.constants import RQGenerator, DeliveryStatus
 from shared.logger import get_logger, log_recv, log_send
 from server.server_state import ServerState
-from server import subscriptions, registration, publish, alerts, acks
+from server import subscriptions, registration, publish, alerts, acks, close_alert
 from server.retransmission import RetransmissionManager
 
 class EmergencyServer:
@@ -96,9 +96,10 @@ class EmergencyServer:
 
         elif msg_type == "ALERT_ACK":
             acks.handle_alert_ack(self.state, self.retransmitter, msg, addr)
+        elif msg_type == "CLOSE_ALERT":
+            close_alert.handle_close_alert(self.state, msg, addr, self.send_response, self.send_notification, persist=self.state.save_to_file)
 
         # TODO P2-07
-        # TODO P2-08
         # TODO P2-09
 
 
@@ -126,7 +127,6 @@ class EmergencyServer:
     def send_notification(self, addr, msg_type: str, payload: dict, needs_ack: bool = False, name: str = None) -> int:
         """2.4. Server-initiated message (ALERT, ALERT_UPDATE, ALL_CLEAR) with a new RQ#. Returns the RQ#."""
         # TODO P2-07: send ALERT_UPDATE with send_notification(addr, "ALERT_UPDATE", payload, ...)
-        # TODO P2-08: send ALL_CLEAR with send_notification(addr, "ALL_CLEAR", payload, ...)
         rq_num = self.rq_gen.get_next()
         if needs_ack:
             with self.state.lock:
