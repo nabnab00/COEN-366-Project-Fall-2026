@@ -7,16 +7,23 @@ log = logging.getLogger("server")
 def handle_close_alert(state, msg, addr, send_response, send_notification, persist=None):
     """Close an incident, reply ALERT_CLOSED, then send ALL_CLEAR to its subscribers"""
     rq_num = msg["rq"]
-    incident_id = msg["data"].get("Incident_ID")
-    reason = msg["data"].get("Reason")
+    data = msg.get("data")
+    if not isinstance(data, dict):
+        data = {}
+    incident_id = data.get("Incident_ID")
+    reason = data.get("Reason")
+
+    # Check types before using incident_id as a dict key, since a list or dict would raise TypeError
+    if not isinstance(incident_id, str) or not incident_id or not isinstance(reason, str) or not reason:
+        log.warning(f"CLOSE_ALERT from {addr} denied: Malformed_Request")
+        send_response(addr, "ALERT_DENIED", rq_num, {"Reason": "Malformed_Request"})
+        return
 
     with state.lock:
         name, user = state.find_user_by_endpoint(addr)
         incident = state.get_incident(incident_id)
 
-        if not incident_id or not reason:
-            error = "Malformed_Request"
-        elif name is None:
+        if name is None:
             error = "Not_Registered"
         elif user["role"] == "SUBSCRIBER":
             error = "Unauthorized_Role"
