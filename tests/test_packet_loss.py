@@ -1,5 +1,5 @@
-import socket
-from tests.helpers import ServerTestCase
+import socket, subprocess, sys, unittest
+from tests.helpers import REPO, ServerTestCase
 from tests.test_alerts import alert_data
 
 class TestLostAcks(ServerTestCase):
@@ -54,3 +54,33 @@ class TestLostAcks(ServerTestCase):
             # each subscriber still gets its own 2 retransmissions
             for _ in range(2):
                 self.receive_and_ack(subscribers[name], name)
+
+
+class TestDefaultDropRate(ServerTestCase):
+    """without --drop-rate no ACK is dropped, so the ALERT is sent only once."""
+
+    server_args = ["--ack-timeout", "0.2"]
+
+    def test_ack_is_not_dropped(self):
+        alice = self.new_client()
+        self.register(alice, "Alice")
+        self.subscribe(alice, "Alice", "HALL", "FIRE")
+        publisher = self.new_client()
+        self.register(publisher, "CampusSecurity", "PUBLISHER", tcp_port=7001)
+        self.request(publisher, "PUBLISH_ALERT", 45, alert_data())
+
+        alert = self.receive(alice)
+        self.send(alice, "ALERT_ACK", alert["rq"], {"Incident_ID": alert["data"]["Incident_ID"], "Version": 1, "Name": "Alice"})
+        alice.settimeout(2)
+        with self.assertRaises(socket.timeout):
+            self.receive(alice) # no retransmission
+
+
+class TestInvalidDropRate(unittest.TestCase):
+    """a drop rate outside 0 to 1 makes the server refuse to start."""
+
+    def test_server_refuses_to_start(self):
+        for rate in ["1.5", "-0.1"]:
+            result = subprocess.run([sys.executable, "-m", "server.emergency_server", "--drop-rate", rate],
+                                    cwd=REPO, capture_output=True, timeout=5)
+            self.assertNotEqual(result.returncode, 0)

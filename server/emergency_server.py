@@ -39,7 +39,7 @@ class EmergencyServer:
 
         # simulated packet loss, the ACK is treated as if it never arrived
         if msg["type"] == "ALERT_ACK" and random.random() < self.drop_rate:
-            self.log.warning(f"[{addr}] DROPPED ALERT_ACK rq={msg['rq']} (simulated packet loss)")
+            self.log.warning(f"[{addr}] DROPPED ALERT_ACK rq={msg['rq']} {msg['data']} (simulated packet loss)")
             return
 
         log_recv(self.log, addr, msg['type'], msg['rq'], msg['data'])        
@@ -145,7 +145,7 @@ class EmergencyServer:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="CENRS Emergency Server")
-    parser.add_argument("port", nargs="?", type=int, default=5000, help="UDP port to listen on (default: 5000")
+    parser.add_argument("port", nargs="?", type=int, default=5000, help="UDP port to listen on (default: 5000)")
     parser.add_argument("state_file", nargs="?", default="server_state.json", help="file used to save and restore server state")
     parser.add_argument("--ack-timeout", type=float, default=2.0, help="seconds to wait for the first ALERT_ACK; doubles on each retry (default: 2.0)")
     parser.add_argument("--drop-rate", type=float, default=0.0, help="chance (0 to 1) of ignoring a received ALERT_ACK, to simulate packet loss (default: 0.0)")
