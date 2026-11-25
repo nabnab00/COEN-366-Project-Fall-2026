@@ -120,9 +120,12 @@ Optional arguments (only needed for testing; the demo uses the defaults):
 |----------|---------|---------|
 | `port` | `5000` | UDP port the server listens on |
 | `state_file` | `server_state.json` | state file name, inside `server_states/` |
+| `--ack-timeout` | `2.0` | seconds to wait for the first ALERT_ACK; doubles on each retry |
+| `--drop-rate` | `0.0` | chance (0 to 1) of ignoring a received ALERT_ACK, to simulate packet loss |
 
 ```bash
 python3 -m server.emergency_server 5099 test.json     # test server: port 5099, server_states/test.json
+python3 -m server.emergency_server --drop-rate 0.5    # ignore about half of the ALERT_ACKs (demo of lost ACKs)
 ```
 
 ### Starting a client
@@ -336,6 +339,7 @@ Run the tests **before every push / pull request**.
 | `tests/test_retransmission.py` | RetransmissionManager: retry timing, same RQ#, giving up after 3 attempts, many timers on one thread (unit tests, no server process) |
 | `tests/test_acks.py` | ALERT_ACK handling and delivery status: in-time and late ACKs, wrong late ACKs, older versions not overwriting newer ones (unit tests, no server process) |
 | `tests/test_incidents.py` | Incident model, version and status changes, and unique Incident_IDs (unit tests, no server process) |
+| `tests/test_packet_loss.py` | simulated packet loss (`--drop-rate`): lost ACKs cause 3 copies then UNCONFIRMED, and the server keeps answering other clients meanwhile |
 | `tests/test_close_alert.py` | CLOSE_ALERT: ALL_CLEAR to old and new subscribers, retransmission and ACK, closing twice, wrong publisher, unknown incident |
 
 
