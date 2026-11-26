@@ -62,10 +62,8 @@ class CENRSClient:
             self.handle_registration_reply(msg)
         elif msg_type in ("SUBSCRIBED", "SUBSCRIPTION-DENIED", "UNSUBSCRIBED", "UNSUBSCRIPTION-DENIED"):
             self.handle_subscription_reply(msg)
-        # TODO P2-06
         elif msg_type in ("ALERT", "ALERT_UPDATE", "ALL_CLEAR"):
             self.handle_alert(msg)
-        # TODO P2-10
         elif msg_type in ("ALERT_ACCEPTED","ALERT_DENIED","ALERT_UPDATED","ALERT_CLOSED","STATUS_RECORDED","STATUS_REJECTED"):
             self.handle_incident_reply(msg)
         else:
@@ -168,22 +166,18 @@ class CENRSClient:
             print("Incident ID:", data["Incident_ID"])
 
         elif msg_type == "ALERT_UPDATED":
-            # TODO: Display incident ID and version
             print("Alert updated successfully.")
             print("Incident ID:", data["Incident_ID"])
             print("Version:", data["Version"])
 
         elif msg_type == "ALERT_CLOSED":
-            # TODO: Display confirmation
             print("Alert closed successfully.")
             print("Incident ID:", data["Incident_ID"])
 
         elif msg_type == "STATUS_RECORDED":
-            # TODO: Display confirmation
             print("Status report recorded successfully.")
 
         else:
-            # TODO: Display the denial reason
             print("Request denied:", data.get("Reason"))
         
 
@@ -352,7 +346,6 @@ class CENRSClient:
         for location, category in subscriptions:
             print(f" - {location} / {category}")
 
-    # TODO P2-10
     def publish_alert(self, category, location, severity, title, description, attachment="NONE"):
             if self.name is None:
                 print("You must register first.")
@@ -372,13 +365,10 @@ class CENRSClient:
                 })
 
     def update_alert(self, incident_id, severity, title, description):
-
-        # TODO: Check whether the client is registered
         if self.name is None:
             print("You must register first.")
             return
 
-        # TODO: Check whether the client can publish
         if self.role not in ("PUBLISHER", "BOTH"):
             print("You must be a publisher to update alerts.")
             return
@@ -391,13 +381,10 @@ class CENRSClient:
         })
 
     def close_alert(self, incident_id, reason):
-
-        # TODO: Check registration
         if self.name is None:
             print('You must register first')
             return
 
-        # TODO: Check publisher role
         if self.role not in ("PUBLISHER", "BOTH"):
             print("You must be a publisher to close alerts.")
             return
@@ -408,13 +395,10 @@ class CENRSClient:
         })
 
     def status_report(self, incident_id, status):
-
-        # TODO: Check registration
         if self.name is None:
             print('You must register first')
             return
 
-        # TODO: Check for SUBSCRIBER or BOTH role
         if self.role not in ("SUBSCRIBER", "BOTH"):
             print("You must be a subscriber to send status reports.")
             return

@@ -46,8 +46,6 @@ class RetransmissionManager:
         return self.base_timeout * (2 ** (attempt - 1)) + random.uniform(0, self.max_random_delay)
 
 
-    # TODO P2-07, P2-08: don't call track() directly; use EmergencyServer.send_notification(..., needs_ack=True, name=name),
-    #                    which also records PENDING in delivery_status and sends the first copy
     def track(self, rq_num, address, msg_type, payload, name=None):
         """Adds a critical notification to the pending list and its timeout deadline to the heap after attempt 1."""
         with self.condition:

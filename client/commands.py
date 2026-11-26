@@ -27,7 +27,6 @@ def run_menu_commands(client):
             client.unsubscribe(location, category)
         elif choice == "5":
             client.list_subscriptions()
-        # TODO P2-10
         elif choice == "6":
             category = input("Category: ")
             location = input("Location: ")
