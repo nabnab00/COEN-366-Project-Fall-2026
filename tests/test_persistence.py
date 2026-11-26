@@ -190,19 +190,19 @@ class TestDeliveryStatusPersistence(ServerTestCase):
             },
         )
 
-        # Give the server some time to save the ACK
-        time.sleep(0.3)
+        # The ACK is handled on its own thread, so wait (up to 2s) until it is saved
+        deadline = time.time() + 2
+        while self.saved_full_state()["delivery_status"][incident_id]["Alice"]["status"] != "CONFIRMED":
+            self.assertLess(time.time(), deadline, "ACK was never saved as CONFIRMED")
+            time.sleep(0.05)
 
-        saved = self.saved_full_state()
-        self.assertEqual(
-            saved["delivery_status"][incident_id]["Alice"],
-            {"version": 1, "status": "CONFIRMED"},
-        )
-
-        # Crash and restart (CONFIRMED should still be on disk after restart)
+        # Crash and restart
         self.stop_server()
         self.start_server()
 
+        # Register someone so the restarted server writes its loaded state back to the file;
+        # otherwise we would only be reading the file the old server left behind
+        self.register(self.new_client(), "Bob")
         saved = self.saved_full_state()
         self.assertEqual(
             saved["delivery_status"][incident_id]["Alice"],
