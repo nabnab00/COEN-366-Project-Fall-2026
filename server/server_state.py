@@ -3,6 +3,7 @@ import json
 import os
 
 from server.incidents import Incident, IncidentIDGenerator
+from shared.constants import DeliveryStatus
 
 
 class ServerState:
@@ -120,6 +121,13 @@ class ServerState:
             self.status_reports = saved_state.get("status_reports", {})
 
             self.delivery_status = saved_state.get("delivery_status", {})
+
+            # Retransmission timers are not saved, so a delivery that was still PENDING
+            # when the server stopped can never be confirmed: mark it UNCONFIRMED.
+            for deliveries in self.delivery_status.values():
+                for delivery in deliveries.values():
+                    if delivery["status"] == DeliveryStatus.PENDING.value:
+                        delivery["status"] = DeliveryStatus.UNCONFIRMED.value
 
             self.alert_recipients = {
                 incident_id: set(names)

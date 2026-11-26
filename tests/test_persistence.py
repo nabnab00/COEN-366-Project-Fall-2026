@@ -124,6 +124,29 @@ class TestPersistence(ServerTestCase):
         self.assertEqual(saved["status_reports"][incident_id]["Alice"], "NEED_HELP")
         self.assertIn("Alice", saved["alert_recipients"][incident_id])
 
+    def test_pending_delivery_becomes_unconfirmed_after_restart(self):
+        publisher = self.new_client()
+        self.register(publisher, "CampusSecurity", "PUBLISHER", tcp_port=7001)
+        alice = self.new_client()
+        self.register(alice, "Alice")
+        self.subscribe(alice, "Alice", "HALL", "FIRE")
+
+        reply = self.request(publisher, "PUBLISH_ALERT", 10, {
+            "Category": "FIRE", "Location": "HALL", "Severity": "CRITICAL",
+            "Title": "Fire alarm", "Description": "Evacuate now", "Attachment": "NONE"})
+        incident_id = reply["data"]["Incident_ID"]
+        self.receive(alice) # the ALERT, deliberately not ACKed
+
+        # Crash while the server is still waiting for Alice's ACK
+        self.stop_server()
+        self.assertEqual(self.saved_full_state()["delivery_status"][incident_id]["Alice"]["status"], "PENDING")
+        self.start_server()
+
+        # Register someone so the restarted server writes its loaded state back to the file
+        self.register(self.new_client(), "Bob")
+        self.assertEqual(self.saved_full_state()["delivery_status"][incident_id]["Alice"],
+                         {"version": 1, "status": "UNCONFIRMED"})
+
 
 class TestDeliveryStatusPersistence(ServerTestCase):
     """Test that CRITICAL alerts write delivery_status and it survives a restart."""
@@ -185,4 +208,3 @@ class TestDeliveryStatusPersistence(ServerTestCase):
             saved["delivery_status"][incident_id]["Alice"],
             {"version": 1, "status": "CONFIRMED"},
         )
-
