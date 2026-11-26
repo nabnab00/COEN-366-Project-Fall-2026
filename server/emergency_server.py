@@ -156,7 +156,13 @@ class EmergencyServer:
     def listen(self):
         """Main loop continuously listening for incoming UDP datagrams."""
         while True:
-            data, addr = self.sock.recvfrom(4096)
+            try:
+                data, addr = self.sock.recvfrom(4096)
+            except ConnectionResetError:
+                # On Windows, sending UDP to a client that has closed its socket can make
+                # the next recvfrom() raise this error. Ignore the error so the server keeps running.
+                self.log.warning("ConnectionResetError: A client likely closed its socket. Continuing...")
+                continue
             # Dispatch to a new thread for concurrent processing
             threading.Thread(target=self.handle_client, args=(data, addr), daemon=True).start()
 
