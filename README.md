@@ -382,6 +382,7 @@ Run the tests **before every push / pull request**.
 | `tests/test_alerts.py` | ALERT distribution: notification matching, roles, CRITICAL needs an ACK, and which clients receive it over UDP; retransmission and ALERT_ACK (accepted, ignored, duplicate) over UDP |
 | `tests/test_update_alert.py` | ALERT_UPDATE: owner update, matching subscribers, CRITICAL update ACK, and denial reasons over UDP |
 | `tests/test_status_reports.py` | STATUS_REPORT: accepted report plus denial reasons (role, unknown incident, invalid status, endpoint mismatch, malformed) over UDP |
+| `tests/test_robustness.py` | unknown message types are logged without stopping the server; a restarted client restores its saved profile |
 | `tests/test_retransmission.py` | RetransmissionManager: retry timing, same RQ#, giving up after 3 attempts, many timers on one thread (unit tests, no server process) |
 | `tests/test_acks.py` | ALERT_ACK handling and delivery status: in-time and late ACKs, wrong late ACKs, older versions not overwriting newer ones (unit tests, no server process) |
 | `tests/test_incidents.py` | Incident model, version and status changes, and unique Incident_IDs (unit tests, no server process) |
