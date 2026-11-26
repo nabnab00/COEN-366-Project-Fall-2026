@@ -76,6 +76,16 @@ class ServerTestCase(unittest.TestCase):
 
     # =============================== HELPER FUNCTIONS ===============================
     # get the saved state from the server
+    # return only users.
     def saved_state(self):
+        data = self.saved_full_state()
+
+        if data.get("schema_version") == 2:
+            return data["users"]
+
+        return data
+
+    # Used by new tests: return the entire saved file.
+    def saved_full_state(self):
         with open(os.path.join(self.folder, STATE_FILE)) as f:
             return json.load(f)

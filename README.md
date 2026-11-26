@@ -14,6 +14,9 @@ Campus Emergency Notification and Response System (CENRS)
 - [Protocol decisions](#protocol-decisions)
   - [PUBLISH_ALERT](#publish_alert)
   - [ALERT](#alert)
+  - [ALERT_ACK](#alert_ack)
+  - [UPDATE_ALERT / ALERT_UPDATE](#update_alert--alert_update)
+  - [STATUS_REPORT](#status_report)
 - [Logging](#logging)
   - [Log line format](#log-line-format)
   - [Logger or print?](#logger-or-print)
@@ -34,8 +37,11 @@ COEN-366-Project-Fall-2026/
 │   ├── subscriptions.py      SUBSCRIBE / UNSUBSCRIBE, and matches() for alert matching
 │   ├── incidents.py          Incident model (version, ACTIVE/CLOSED) and the Incident_ID generator
 │   ├── publish.py            PUBLISH_ALERT
-│   ├── alerts.py             sends ALERT to every matching subscriber
-│   └── server_state.py       users, subscriptions and incidents in memory; users saved to and loaded from a JSON file
+│   ├── alerts.py             ALERT distribution and UPDATE_ALERT / ALERT_UPDATE
+│   ├── status_reports.py     STATUS_REPORT
+│   ├── acks.py               ALERT_ACK handling
+│   ├── retransmission.py     CRITICAL / ALL_CLEAR retransmission timers
+│   └── server_state.py       users, incidents, status reports, delivery status; saved to and loaded from a JSON file
 ├── client/
 │   ├── client_app.py         CENRSClient: sends requests, receives replies on a background thread, saves its profile
 │   └── commands.py           the terminal menu
@@ -51,7 +57,7 @@ Created when the system runs (all in `.gitignore`):
 
 | Folder | Contents |
 |--------|----------|
-| `server_states/` | the server's saved users and subscriptions |
+| `server_states/` | the server's saved state (users, incidents, status reports, delivery status, alert recipients) |
 | `profiles/` | each client's saved profile (name, role, subscriptions) |
 | `logs/` | log files for the server and each client |
 
@@ -198,7 +204,7 @@ Choices the spec leaves to the team. Copy these into the report's design and ass
 ### PUBLISH_ALERT
 Request payload: `Category`, `Location`, `Severity`, `Title`, `Description`, and optionally `Attachment` (missing means `NONE`) and `Name`.
 
-- **Identifying the publisher.** The spec's PUBLISH_ALERT has no Name field, so the server finds the sender by the IP and UDP port it registered with (`ServerState.find_user_by_endpoint`). If the client also sends `Name`, it must be the name registered at that endpoint. UPDATE_ALERT and CLOSE_ALERT should use the same lookup.
+- **Identifying the publisher.** The spec's PUBLISH_ALERT has no Name field, so the server finds the sender by the IP and UDP port it registered with (`ServerState.find_user_by_endpoint`). If the client also sends `Name`, it must be the name registered at that endpoint. UPDATE_ALERT and CLOSE_ALERT use the same lookup.
 - **Title and Description** are JSON strings, so spaces need no special encoding. Both must be non-empty; Title is limited to 100 characters and Description to 1000, so every ALERT fits in one UDP datagram.
 - **ALL is only a subscription wildcard.** An incident must name a real location and category.
 - **Attachment** is `NONE` or a plain file name. Paths (`/`, `\`, `..`) are refused so a subscriber can never ask a publisher for a file outside its shared folder.
@@ -228,6 +234,45 @@ Sent by a subscriber for each CRITICAL ALERT, CRITICAL ALERT_UPDATE and every AL
 - **Ignored** if it is malformed or does not match; retransmission continues.
 - **Late ACKs** (after the server gave up) still turn UNCONFIRMED back into CONFIRMED. A repeated ACK is logged as a duplicate and ignored.
 - **Delivery status** is kept per subscriber and incident in `ServerState.delivery_status` (PENDING, CONFIRMED or UNCONFIRMED).
+- **After a restart,** retransmission timers are gone, so any delivery still PENDING when the server stopped is loaded as UNCONFIRMED. The server does not resend it, and an ACK for it arriving after the restart is ignored.
+
+### UPDATE_ALERT / ALERT_UPDATE
+Sent by the publisher that owns an active incident. Request payload: `Incident_ID`, `Severity`, `Title`, `Description`, and optionally `Name`.
+
+- **Who may update:** only the original publisher (or BOTH client) that created the incident, found the same way as PUBLISH_ALERT. Location and Category do not change.
+- **Version** goes up by 1. The server replies `ALERT_UPDATED`, then sends `ALERT_UPDATE` to every matching subscriber (same matching rules as ALERT). Recipients are added to `alert_recipients` for a future ALL_CLEAR.
+- **ALERT_UPDATE payload:** `Incident_ID`, `Version`, `Severity`, `Title`, `Description`.
+- **Reliability:** a CRITICAL update is sent with `needs_ack=True` and `name=subscriber_name` through `send_notification`, so each subscriber's ACK is matched the same way as for ALERT. INFO / WARNING updates do not need an ACK.
+
+| Reply | When |
+|-------|------|
+| `ALERT_UPDATED {Incident_ID, Version}` | incident updated and ALERT_UPDATE sent |
+| `ALERT_DENIED Malformed_Request` | a required field is missing, the wrong type, empty, or too long |
+| `ALERT_DENIED Invalid_Severity` | severity not in the allowed list |
+| `ALERT_DENIED Not_Registered` | no client is registered at the sender's IP and UDP port |
+| `ALERT_DENIED Endpoint_Mismatch` | `Name` was sent but belongs to a different client |
+| `ALERT_DENIED Unauthorized_Role` | the sender is registered as SUBSCRIBER |
+| `ALERT_DENIED Unknown_Incident` | no incident with that Incident_ID |
+| `ALERT_DENIED Incident_Closed` | the incident is already CLOSED |
+| `ALERT_DENIED Not_Incident_Publisher` | a different publisher tried to update it |
+
+### STATUS_REPORT
+Sent by a SUBSCRIBER or BOTH client for an active incident. Request payload: `Incident_ID`, `Name`, `Status` (`SAFE`, `NEED_HELP`, or `LEFT_AREA`).
+
+- **Latest status wins.** The server keeps one status per client per incident in `ServerState.status_reports` and overwrites it when the same client reports again.
+- **Publisher-only clients cannot report.** Only SUBSCRIBER and BOTH roles are accepted.
+- Status reports are saved with the rest of the server state (`schema_version` 2) so they survive a restart.
+
+| Reply | When |
+|-------|------|
+| `STATUS_RECORDED` | status stored for that client and incident |
+| `STATUS_REJECTED Malformed_Request` | a required field is missing, the wrong type, or empty |
+| `STATUS_REJECTED Invalid_Status` | status not in the allowed list |
+| `STATUS_REJECTED Not_Registered` | `Name` is unknown or no client is registered at this endpoint |
+| `STATUS_REJECTED Endpoint_Mismatch` | `Name` does not match the sender's registered endpoint |
+| `STATUS_REJECTED Unauthorized_Role` | the sender is registered as PUBLISHER |
+| `STATUS_REJECTED Unknown_Incident` | no incident with that Incident_ID |
+| `STATUS_REJECTED Incident_Closed` | the incident is already CLOSED |
 
 ### CLOSE_ALERT / ALL_CLEAR
 Sent by the publisher that created the incident. Payload: `Incident_ID`, `Reason`.
@@ -333,9 +378,11 @@ Run the tests **before every push / pull request**.
 | `tests/helpers.py` | shared setup: start/stop server, fake clients, `register`, `subscribe`, `unsubscribe`, `saved_state` |
 | `tests/test_registration.py` | REGISTER and DE-REGISTER, including denial reasons |
 | `tests/test_subscriptions.py` | SUBSCRIBE, UNSUBSCRIBE, and wildcard matching |
-| `tests/test_persistence.py` | recovery after a crash, and concurrent clients |
+| `tests/test_persistence.py` | recovery after a crash: users, incidents, status reports, alert recipients, delivery status, and concurrent clients |
 | `tests/test_publish.py` | PUBLISH_ALERT: who may publish, every denial reason, unique IDs under concurrent publishes, and the reply over UDP |
 | `tests/test_alerts.py` | ALERT distribution: notification matching, roles, CRITICAL needs an ACK, and which clients receive it over UDP; retransmission and ALERT_ACK (accepted, ignored, duplicate) over UDP |
+| `tests/test_update_alert.py` | ALERT_UPDATE: owner update, matching subscribers, CRITICAL update ACK, and denial reasons over UDP |
+| `tests/test_status_reports.py` | STATUS_REPORT: accepted report plus denial reasons (role, unknown incident, invalid status, endpoint mismatch, malformed) over UDP |
 | `tests/test_retransmission.py` | RetransmissionManager: retry timing, same RQ#, giving up after 3 attempts, many timers on one thread (unit tests, no server process) |
 | `tests/test_acks.py` | ALERT_ACK handling and delivery status: in-time and late ACKs, wrong late ACKs, older versions not overwriting newer ones (unit tests, no server process) |
 | `tests/test_incidents.py` | Incident model, version and status changes, and unique Incident_IDs (unit tests, no server process) |
