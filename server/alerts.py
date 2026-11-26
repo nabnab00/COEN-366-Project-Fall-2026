@@ -170,4 +170,3 @@ def handle_update_alert(
         f"v{payload['Version']} updated by {name}; "
         f"sent to {len(recipients)} subscriber(s)"
     )
-# TODO P2-08
