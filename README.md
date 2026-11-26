@@ -197,6 +197,7 @@ they are registered, and the server ignores their DE-REGISTER because it has no 
 - The server listens on `127.0.0.1` and clients register with IP `127.0.0.1`, so everything must run on the same machine.
 - A client gets no feedback if the server never replies (for example, DE-REGISTER for a name the server doesn't know).
   A reply timeout is planned for Phase 2.
+- On Windows, sending UDP to a client that has closed its socket makes the server's next receive fail with `ConnectionResetError`. The server logs a warning and keeps running, so the only effect is that warning in the log.
 
 ## Protocol decisions
 Choices the spec leaves to the team. Copy these into the report's design and assumptions sections.IDK what to write so I let Ai do it. Reminder to delete after !!!!
