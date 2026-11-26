@@ -126,6 +126,9 @@ class EmergencyServer:
                 persist=self.state.save_to_file
             )
 
+        else:
+            self.log.warning(f"Unknown message type from {addr}: {msg_type} (rq={msg['rq']})")
+
 
     def mark_unconfirmed(self, notification):
         """Called by the RetransmissionManager after the last attempt times out for the alert."""
