@@ -1,4 +1,6 @@
-import json, os, subprocess, sys, tempfile, time, unittest
+import json, logging, os, subprocess, sys, tempfile, time, unittest
+from shared.protocol import ProtocolMessage
+from server.emergency_server import EmergencyServer
 from tests.helpers import REPO, ServerTestCase
 
 
@@ -37,3 +39,24 @@ class TestClientProfileReload(unittest.TestCase):
                 input="q\n", capture_output=True, text=True, timeout=5,
             )
             self.assertIn("Restored Alice on UDP port 6123", result.stdout)
+
+
+class TestHandlerCrash(unittest.TestCase):
+    """if a handler crashes, the client gets a Server_Error denial instead of no reply."""
+
+    def handle(self, msg_type):
+        server = EmergencyServer.__new__(EmergencyServer) # no socket or state file needed
+        server.log = logging.getLogger("test_handler_crash")
+        server.log.disabled = True # the crash traceback is expected, keep the test output clean
+        server.drop_rate = 0.0
+        server.dispatch = lambda msg, addr: 1 / 0
+        sent = []
+        server.send_response = lambda addr, msg_type, rq, payload: sent.append((msg_type, rq, payload))
+        server.handle_client(ProtocolMessage.encode(msg_type, 7, {}), ("127.0.0.1", 6000))
+        return sent
+
+    def test_crash_sends_denial(self):
+        self.assertEqual(self.handle("STATUS_REPORT"), [("STATUS_REJECTED", 7, {"Reason": "Server_Error"})])
+
+    def test_crash_on_alert_ack_sends_nothing(self):
+        self.assertEqual(self.handle("ALERT_ACK"), [])

@@ -10,6 +10,18 @@ from server.server_state import ServerState
 from server import subscriptions, registration, publish, alerts, acks, close_alert, status_reports
 from server.retransmission import RetransmissionManager
 
+# the denial each request gets if its handler crashes
+DENIAL_TYPES = {
+    "REGISTER": "REGISTER-DENIED",
+    "DE-REGISTER": "DEREGISTER-DENIED",
+    "SUBSCRIBE": "SUBSCRIPTION-DENIED",
+    "UNSUBSCRIBE": "UNSUBSCRIPTION-DENIED",
+    "PUBLISH_ALERT": "ALERT_DENIED",
+    "UPDATE_ALERT": "ALERT_DENIED",
+    "CLOSE_ALERT": "ALERT_DENIED",
+    "STATUS_REPORT": "STATUS_REJECTED",
+}
+
 class EmergencyServer:
     
     def __init__(self, host='127.0.0.1', port=5000, state_file="server_state.json", ack_timeout=2.0, drop_rate=0.0):
@@ -48,6 +60,10 @@ class EmergencyServer:
             self.dispatch(msg, addr)
         except Exception:
             self.log.exception(f"Handler for {msg['type']} (RQ: {msg['rq']}) from {addr} crashed.")
+            # tell the client instead of leaving it to time out (ALERT_ACK never gets a reply)
+            denial = DENIAL_TYPES.get(msg["type"])
+            if denial:
+                self.send_response(addr, denial, msg["rq"], {"Reason": "Server_Error"})
 
     def dispatch(self, msg, addr):
         """Routes a decoded message to the right handler."""
