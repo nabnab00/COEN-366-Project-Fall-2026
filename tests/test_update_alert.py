@@ -162,3 +162,20 @@ class TestUpdateAlert(ServerTestCase):
         reply = self.update(publisher, incident_id, Severity="URGENT")
         self.assertEqual(reply["type"], "ALERT_DENIED")
         self.assertEqual(reply["data"]["Reason"], "Invalid_Severity")
+
+
+    def test_closed_incident_denied(self):
+        publisher = self.publisher()
+        incident_id = self.publish(publisher)
+        self.request(publisher, "CLOSE_ALERT", 15, {"Incident_ID": incident_id, "Reason": "Resolved"})
+        reply = self.update(publisher, incident_id)
+        self.assertEqual(reply["type"], "ALERT_DENIED")
+        self.assertEqual(reply["data"]["Reason"], "Incident_Closed")
+
+
+    def test_malformed_update_denied(self):
+        publisher = self.publisher()
+        incident_id = self.publish(publisher)
+        reply = self.request(publisher, "UPDATE_ALERT", 20, {"Incident_ID": incident_id, "Severity": "INFO"}) # no Title or Description
+        self.assertEqual(reply["type"], "ALERT_DENIED")
+        self.assertEqual(reply["data"]["Reason"], "Malformed_Request")

@@ -107,3 +107,21 @@ class TestStatusReports(ServerTestCase):
         incident_id = self.publish(publisher)
         reply = self.request(alice, "STATUS_REPORT", 20, {"Incident_ID": incident_id, "Name": "Alice"}) # no Status
         self.assert_rejected(reply, "Malformed_Request")
+
+
+    def test_closed_incident_denied(self):
+        publisher = self.publisher()
+        alice = self.subscriber("Alice")
+        incident_id = self.publish(publisher)
+        self.request(publisher, "CLOSE_ALERT", 15, {"Incident_ID": incident_id, "Reason": "Resolved"})
+        reply = self.report(alice, incident_id, Name="Alice")
+        self.assert_rejected(reply, "Incident_Closed")
+
+
+    def test_both_role_can_report(self):
+        publisher = self.publisher()
+        incident_id = self.publish(publisher)
+        facilities = self.new_client()
+        self.register(facilities, "Facilities", "BOTH", tcp_port=7002)
+        reply = self.report(facilities, incident_id, Name="Facilities", Status="LEFT_AREA")
+        self.assertEqual(reply["type"], "STATUS_RECORDED")
