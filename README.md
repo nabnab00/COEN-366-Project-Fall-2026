@@ -197,6 +197,7 @@ they are registered, and the server ignores their DE-REGISTER because it has no 
 - The server listens on `127.0.0.1` and clients register with IP `127.0.0.1`, so everything must run on the same machine.
 - A client gets no feedback if the server never replies (for example, DE-REGISTER for a name the server doesn't know).
   A reply timeout is planned for Phase 2.
+- On Windows, sending UDP to a client that has closed its socket makes the server's next receive fail with `ConnectionResetError`. The server logs a warning and keeps running, so the only effect is that warning in the log.
 
 ## Protocol decisions
 Choices the spec leaves to the team. Copy these into the report's design and assumptions sections.IDK what to write so I let Ai do it. Reminder to delete after !!!!
@@ -280,6 +281,9 @@ Sent by the publisher that created the incident. Payload: `Incident_ID`, `Reason
 - The incident becomes CLOSED and its Version goes up by 1. The server replies `ALERT_CLOSED`, then sends `ALL_CLEAR` (`Incident_ID`, `Version`, `Message` = the `Reason`) to everyone who got the alert plus everyone subscribed to it now.
 - ALL_CLEAR always needs an `ALERT_ACK` and is retransmitted like a CRITICAL alert.
 - Denied with `ALERT_DENIED`: `Malformed_Request`, `Not_Registered`, `Unauthorized_Role`, `Unknown_Incident`, `Incident_Closed`, `Not_Incident_Publisher`.
+
+### Server errors
+If a handler crashes, the server logs the traceback and replies with that request's usual denial and the reason `Server_Error` (for example `STATUS_REJECTED Server_Error`), so the client is not left waiting. ALERT_ACK never gets a reply, so a crash there is only logged.
 
 ## Logging
 
@@ -383,6 +387,7 @@ Run the tests **before every push / pull request**.
 | `tests/test_alerts.py` | ALERT distribution: notification matching, roles, CRITICAL needs an ACK, and which clients receive it over UDP; retransmission and ALERT_ACK (accepted, ignored, duplicate) over UDP |
 | `tests/test_update_alert.py` | ALERT_UPDATE: owner update, matching subscribers, CRITICAL update ACK, and denial reasons over UDP |
 | `tests/test_status_reports.py` | STATUS_REPORT: accepted report plus denial reasons (role, unknown incident, invalid status, endpoint mismatch, malformed) over UDP |
+| `tests/test_robustness.py` | unknown message types are logged without stopping the server; a restarted client restores its saved profile; a crashed handler replies `Server_Error` |
 | `tests/test_retransmission.py` | RetransmissionManager: retry timing, same RQ#, giving up after 3 attempts, many timers on one thread (unit tests, no server process) |
 | `tests/test_acks.py` | ALERT_ACK handling and delivery status: in-time and late ACKs, wrong late ACKs, older versions not overwriting newer ones (unit tests, no server process) |
 | `tests/test_incidents.py` | Incident model, version and status changes, and unique Incident_IDs (unit tests, no server process) |
@@ -402,6 +407,7 @@ Keep one behaviour per test, and name the test after what it checks.
 
 ### If a test fails
 - **FAIL**: the server answered differently than expected. Compare the expected and actual values in the output.
-- **ERROR with `TimeoutError`**: the server never replied. It may have crashed handling the message.
+- **ERROR with `TimeoutError`**: the server never replied.
+- **A reply with `Server_Error`**: the handler crashed; the traceback is in the server's log.
   Test output hides the server's logs, so reproduce the steps by hand against `python3 -m server.emergency_server 5999` to see them.
 - **`Ran 0 tests`**: you're not in the repository root, or a test file isn't directly in `tests/`.

@@ -8,11 +8,13 @@ from shared.constants import RQGenerator, Role
 from shared.logger import get_logger, log_recv, log_send
 from client.commands import run_menu_commands
 
+PROFILE_DIR = "profiles/" # where each client saves its profile, and loads it on restart
+
 class CENRSClient:
 
     def __init__(self, server_host='127.0.0.1', server_port=5000, local_port=0, profile_path="client_profile.json"):
         self.server_addr = (server_host, server_port)
-        self.profile_path = "profiles/" + profile_path
+        self.profile_path = PROFILE_DIR + profile_path
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
         try:
@@ -62,10 +64,8 @@ class CENRSClient:
             self.handle_registration_reply(msg)
         elif msg_type in ("SUBSCRIBED", "SUBSCRIPTION-DENIED", "UNSUBSCRIBED", "UNSUBSCRIPTION-DENIED"):
             self.handle_subscription_reply(msg)
-        # TODO P2-06
         elif msg_type in ("ALERT", "ALERT_UPDATE", "ALL_CLEAR"):
             self.handle_alert(msg)
-        # TODO P2-10
         elif msg_type in ("ALERT_ACCEPTED","ALERT_DENIED","ALERT_UPDATED","ALERT_CLOSED","STATUS_RECORDED","STATUS_REJECTED"):
             self.handle_incident_reply(msg)
         else:
@@ -168,22 +168,18 @@ class CENRSClient:
             print("Incident ID:", data["Incident_ID"])
 
         elif msg_type == "ALERT_UPDATED":
-            # TODO: Display incident ID and version
             print("Alert updated successfully.")
             print("Incident ID:", data["Incident_ID"])
             print("Version:", data["Version"])
 
         elif msg_type == "ALERT_CLOSED":
-            # TODO: Display confirmation
             print("Alert closed successfully.")
             print("Incident ID:", data["Incident_ID"])
 
         elif msg_type == "STATUS_RECORDED":
-            # TODO: Display confirmation
             print("Status report recorded successfully.")
 
         else:
-            # TODO: Display the denial reason
             print("Request denied:", data.get("Reason"))
         
 
@@ -352,7 +348,6 @@ class CENRSClient:
         for location, category in subscriptions:
             print(f" - {location} / {category}")
 
-    # TODO P2-10
     def publish_alert(self, category, location, severity, title, description, attachment="NONE"):
             if self.name is None:
                 print("You must register first.")
@@ -372,13 +367,10 @@ class CENRSClient:
                 })
 
     def update_alert(self, incident_id, severity, title, description):
-
-        # TODO: Check whether the client is registered
         if self.name is None:
             print("You must register first.")
             return
 
-        # TODO: Check whether the client can publish
         if self.role not in ("PUBLISHER", "BOTH"):
             print("You must be a publisher to update alerts.")
             return
@@ -391,13 +383,10 @@ class CENRSClient:
         })
 
     def close_alert(self, incident_id, reason):
-
-        # TODO: Check registration
         if self.name is None:
             print('You must register first')
             return
 
-        # TODO: Check publisher role
         if self.role not in ("PUBLISHER", "BOTH"):
             print("You must be a publisher to close alerts.")
             return
@@ -408,13 +397,10 @@ class CENRSClient:
         })
 
     def status_report(self, incident_id, status):
-
-        # TODO: Check registration
         if self.name is None:
             print('You must register first')
             return
 
-        # TODO: Check for SUBSCRIBER or BOTH role
         if self.role not in ("SUBSCRIBER", "BOTH"):
             print("You must be a subscriber to send status reports.")
             return
@@ -463,14 +449,14 @@ if __name__ == "__main__":
 
     if args.local_port is None:
         profile_path = "client_profile.json"
-        profile = load_profile(profile_path)
+        profile = load_profile(PROFILE_DIR + profile_path)
         local_port = profile["udp_port"] if profile else 0
     else:
         local_port = args.local_port
         if not 1024 <= local_port <= 65535 or local_port == args.server_port:
             raise SystemExit(f"Use a port from 1024 to 65535, other than {args.server_port}.")
         profile_path = f"{local_port}.json"
-        profile = load_profile(profile_path)
+        profile = load_profile(PROFILE_DIR + profile_path)
 
     client = CENRSClient(server_port=args.server_port, local_port=local_port, profile_path=profile_path)
     if profile is not None:

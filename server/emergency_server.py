@@ -10,6 +10,18 @@ from server.server_state import ServerState
 from server import subscriptions, registration, publish, alerts, acks, close_alert, status_reports
 from server.retransmission import RetransmissionManager
 
+# the denial each request gets if its handler crashes
+DENIAL_TYPES = {
+    "REGISTER": "REGISTER-DENIED",
+    "DE-REGISTER": "DEREGISTER-DENIED",
+    "SUBSCRIBE": "SUBSCRIPTION-DENIED",
+    "UNSUBSCRIBE": "UNSUBSCRIPTION-DENIED",
+    "PUBLISH_ALERT": "ALERT_DENIED",
+    "UPDATE_ALERT": "ALERT_DENIED",
+    "CLOSE_ALERT": "ALERT_DENIED",
+    "STATUS_REPORT": "STATUS_REJECTED",
+}
+
 class EmergencyServer:
     
     def __init__(self, host='127.0.0.1', port=5000, state_file="server_state.json", ack_timeout=2.0, drop_rate=0.0):
@@ -44,7 +56,17 @@ class EmergencyServer:
 
         log_recv(self.log, addr, msg['type'], msg['rq'], msg['data'])        
 
-        # Outline for Epic 2 & 3
+        try:
+            self.dispatch(msg, addr)
+        except Exception:
+            self.log.exception(f"Handler for {msg['type']} (RQ: {msg['rq']}) from {addr} crashed.")
+            # tell the client instead of leaving it to time out (ALERT_ACK never gets a reply)
+            denial = DENIAL_TYPES.get(msg["type"])
+            if denial:
+                self.send_response(addr, denial, msg["rq"], {"Reason": "Server_Error"})
+
+    def dispatch(self, msg, addr):
+        """Routes a decoded message to the right handler."""
         msg_type = msg["type"]
 
         if msg_type == "REGISTER":
@@ -120,6 +142,9 @@ class EmergencyServer:
                 persist=self.state.save_to_file
             )
 
+        else:
+            self.log.warning(f"Unknown message type from {addr}: {msg_type} (rq={msg['rq']})")
+
 
     def mark_unconfirmed(self, notification):
         """Called by the RetransmissionManager after the last attempt times out for the alert."""
@@ -156,7 +181,13 @@ class EmergencyServer:
     def listen(self):
         """Main loop continuously listening for incoming UDP datagrams."""
         while True:
-            data, addr = self.sock.recvfrom(4096)
+            try:
+                data, addr = self.sock.recvfrom(4096)
+            except ConnectionResetError:
+                # On Windows, sending UDP to a client that has closed its socket can make
+                # the next recvfrom() raise this error. Ignore the error so the server keeps running.
+                self.log.warning("ConnectionResetError: A client likely closed its socket. Continuing...")
+                continue
             # Dispatch to a new thread for concurrent processing
             threading.Thread(target=self.handle_client, args=(data, addr), daemon=True).start()
 

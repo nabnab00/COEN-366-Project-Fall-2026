@@ -21,6 +21,11 @@ def distribute_alert(state, incident, send_notification) -> list[str]:
     """2.4. Sends ALERT to every matching subscriber and returns their names."""
     # snapshot under the lock, send after releasing it
     with state.lock:
+        # If the incident was closed before we could send the ALERT, skip this step to avoid sending stale ALERT
+        if not incident.is_active:
+            log.warning(f"Skipping ALERT for {incident.incident_id}: incident is not ACTIVE")
+            return []
+
         recipients = matching_subscribers(state, incident.location, incident.category)
         payload = incident.alert_fields()
         state.alert_recipients.setdefault(incident.incident_id, set()).update(name for name, _ in recipients)
