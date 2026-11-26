@@ -44,7 +44,13 @@ class EmergencyServer:
 
         log_recv(self.log, addr, msg['type'], msg['rq'], msg['data'])        
 
-        # Outline for Epic 2 & 3
+        try:
+            self.dispatch(msg, addr)
+        except Exception:
+            self.log.exception(f"Handler for {msg['type']} (RQ: {msg['rq']}) from {addr} crashed.")
+
+    def dispatch(self, msg, addr):
+        """Routes a decoded message to the right handler."""
         msg_type = msg["type"]
 
         if msg_type == "REGISTER":
