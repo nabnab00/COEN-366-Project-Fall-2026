@@ -9,7 +9,11 @@ def run_menu_commands(client):
         if choice == "1":
             name = input("Name: ")
             role = input("Role (SUBSCRIBER/PUBLISHER/BOTH): ")
-            tcp_port = int(input("TCP Port (0 for subscriber): "))
+            try:
+                tcp_port = int(input("TCP Port (0 for subscriber): "))
+            except ValueError:
+                print("TCP port must be a number.")
+                continue
             client.register(name, role, tcp_port)
         elif choice == "2":
             client.deregister()
