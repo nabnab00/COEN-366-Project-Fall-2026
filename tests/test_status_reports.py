@@ -1,17 +1,5 @@
 from tests.helpers import ServerTestCase
-
-
-def alert_data(**overrides):
-    data = {
-        "Category": "FIRE",
-        "Location": "HALL",
-        "Severity": "WARNING",
-        "Title": "Fire alarm",
-        "Description": "Leave the building",
-        "Attachment": "NONE",
-    }
-    data.update(overrides)
-    return data
+from tests.test_alerts import alert_data
 
 
 def create_status_data(incident_id, name="Alice", status="SAFE", **overrides):
@@ -41,7 +29,7 @@ class TestStatusReports(ServerTestCase):
         return sock
 
     def publish(self, publisher):
-        reply = self.request(publisher, "PUBLISH_ALERT", 10, alert_data())
+        reply = self.request(publisher, "PUBLISH_ALERT", 10, alert_data(Severity="WARNING"))
         self.assertEqual(reply["type"], "ALERT_ACCEPTED")
         return reply["data"]["Incident_ID"]
 

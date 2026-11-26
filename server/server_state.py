@@ -108,7 +108,7 @@ class ServerState:
         with open(self.filename, "r", encoding="utf-8") as f:
             saved_state = json.load(f)
 
-        # Support the new format and your old users-only files.
+        # Also load the Phase 1 format, which saved only users.
         if saved_state.get("schema_version") == 2:
             self.users = saved_state["users"]
 

@@ -95,7 +95,7 @@ class EmergencyServer:
             if incident is not None:
                 alerts.distribute_alert(self.state, incident, self.send_notification)
                 self.state.save_to_file()
-     
+
         elif msg_type == "ALERT_ACK":
             acks.handle_alert_ack(self.state, self.retransmitter, msg, addr)
         elif msg_type == "CLOSE_ALERT":

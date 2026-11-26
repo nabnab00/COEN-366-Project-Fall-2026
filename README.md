@@ -236,7 +236,7 @@ Sent by a subscriber for each CRITICAL ALERT, CRITICAL ALERT_UPDATE and every AL
 - **Delivery status** is kept per subscriber and incident in `ServerState.delivery_status` (PENDING, CONFIRMED or UNCONFIRMED).
 - **After a restart,** retransmission timers are gone, so any delivery still PENDING when the server stopped is loaded as UNCONFIRMED. The server does not resend it, and an ACK for it arriving after the restart is ignored.
 
-### UPDATE_ALERT
+### UPDATE_ALERT / ALERT_UPDATE
 Sent by the publisher that owns an active incident. Request payload: `Incident_ID`, `Severity`, `Title`, `Description`, and optionally `Name`.
 
 - **Who may update:** only the original publisher (or BOTH client) that created the incident, found the same way as PUBLISH_ALERT. Location and Category do not change.
