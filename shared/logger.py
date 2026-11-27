@@ -26,8 +26,8 @@ def get_logger(name, logfile):
 def _peer(addr):
     return f"{addr[0]}:{addr[1]}"
 
-def log_send(log, addr, msg_type, rq, payload):
-    log.info(f"SEND -> {_peer(addr)}  {msg_type} {rq} {payload or {}}")
+def log_send(log, addr, msg_type, rq, payload, tcp=False):
+    log.info(f"SEND -> {_peer(addr)} {' [TCP]' if tcp else ''}  {msg_type} {rq} {payload or {}}")
 
-def log_recv(log, addr, msg_type, rq, payload):
-    log.info(f"RECV <- {_peer(addr)}  {msg_type} {rq} {payload or {}}")
+def log_recv(log, addr, msg_type, rq, payload, tcp=False):
+    log.info(f"RECV <- {_peer(addr)} {' [TCP]' if tcp else ''} {msg_type} {rq} {payload or {}}")
