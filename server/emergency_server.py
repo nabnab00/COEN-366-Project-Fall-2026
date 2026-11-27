@@ -26,7 +26,7 @@ DENIAL_TYPES = {
 
 class EmergencyServer:
     
-    def __init__(self, host='127.0.0.1', port=5000, state_file="server_state.json", ack_timeout=2.0, drop_rate=0.0):
+    def __init__(self, host='127.0.0.1', port=5000, state_file="server_state.json", ack_timeout=2.0, drop_rate=0.0, tcp_port=None):
         self.host = host
         self.port = port
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
