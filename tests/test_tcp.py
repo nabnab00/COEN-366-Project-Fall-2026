@@ -1,7 +1,7 @@
 import json, socket, threading, time, unittest
 
 from shared.protocol import MalformedMessageError
-from shared.tcp import TCPConnection, ConnectionClosedError, MAX_LINE_LENGTH
+from shared.tcp import TCPConnection, ConnectionClosedError, MAX_LINE_LENGTH, MAX_FILE_SIZE
 from tests.helpers import ServerTestCase, SERVER
 
 
@@ -64,6 +64,17 @@ class TestFraming(unittest.TestCase):
         self.raw.shutdown(socket.SHUT_WR)
         with self.assertRaises(ConnectionClosedError):
             self.receiver.recv_exact(100)
+
+    def test_recv_exact_rejects_bad_size(self):
+        with self.assertRaises(ValueError):
+            self.receiver.recv_exact(-5)
+        with self.assertRaises(ValueError):
+            self.receiver.recv_exact(True)
+        with self.assertRaises(ValueError):
+            self.receiver.recv_exact(3.5)
+        with self.assertRaises(ValueError):
+            self.receiver.recv_exact(MAX_FILE_SIZE + 1)
+        self.assertEqual(self.receiver.recv_exact(0), b"")
 
     def test_invalid_json_line(self):
         self.raw.sendall(b"not json\n")

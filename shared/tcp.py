@@ -3,6 +3,7 @@ from shared.protocol import ProtocolMessage, MalformedMessageError
 
 DEFAULT_TIMEOUT = 10.0
 MAX_LINE_LENGTH = 64*1024
+MAX_FILE_SIZE = 16*1024*1024  # Max size of attachments: 16 MiB (attachments larger than this are refused)
 CHUNK_SIZE = 64*1024
 
 class ConnectionClosedError(Exception):
@@ -29,6 +30,10 @@ class TCPConnection:
         return ProtocolMessage.decode(self._recv_line())
 
     def recv_exact(self, size: int) -> bytes:
+        if not isinstance(size, int) or isinstance(size, bool) or size < 0:
+            raise ValueError(f"Size must be a non-negative integer, received {size!r}")
+        if size > MAX_FILE_SIZE:
+            raise ValueError(f"Size {size} exceeds the maximum file size ({MAX_FILE_SIZE})")
         while len(self._buffer) < size:
             self._fill()
         data = bytes(self._buffer[:size])
