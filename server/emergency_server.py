@@ -3,9 +3,11 @@ import threading
 import json
 import argparse
 import random
+import os
 from shared.protocol import ProtocolMessage, MalformedMessageError
 from shared.constants import RQGenerator, DeliveryStatus
 from shared.logger import get_logger, log_recv, log_send
+from shared.tcp import TCPConnection, ConnectionClosedError
 from server.server_state import ServerState
 from server import subscriptions, registration, publish, alerts, acks, close_alert, status_reports
 from server.retransmission import RetransmissionManager
@@ -24,16 +26,23 @@ DENIAL_TYPES = {
 
 class EmergencyServer:
     
-    def __init__(self, host='127.0.0.1', port=5000, state_file="server_state.json", ack_timeout=2.0, drop_rate=0.0):
+    def __init__(self, host='127.0.0.1', port=5000, state_file="server_state.json", ack_timeout=2.0, drop_rate=0.0, tcp_port=None):
         self.host = host
         self.port = port
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.sock.bind((self.host, self.port))
+        self.tcp_port = port if tcp_port is None else tcp_port
+        self.tcp_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        if os.name != "nt":
+            self.tcp_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.tcp_sock.bind((self.host, self.tcp_port))
+        self.tcp_sock.listen()
         self.rq_gen = RQGenerator()
         self.state = ServerState(state_file)
         self.log = get_logger("server", "logs/server.log")
         self.log.info(f"STATE Restored users from {self.state.filename}:\n{json.dumps(self.state.users, indent=2, default=list)}")
         self.log.info(f"Emergency Server started on {self.host}:{self.port}")
+        self.log.info(f"TCP listening on {self.host}:{self.tcp_port}")
         self.retransmitter = RetransmissionManager(
             resend=self.send_response,
             base_timeout=ack_timeout,
@@ -177,9 +186,50 @@ class EmergencyServer:
             self.retransmitter.track(rq_num, addr, msg_type, payload, name)
         self.send_response(addr, msg_type, rq_num, payload)
         return rq_num
+    
+    def listen_tcp(self):
+        """Accepts TCP connections and handles each one on its own thread, so a slow client never blocks the others."""
+        while True:
+            try:
+                conn, addr = self.tcp_sock.accept()
+            except OSError as e:
+                if self.tcp_sock.fileno() == -1:
+                    break  # listening socket was closed
+                self.log.error(f"TCP accept failed: {e}")
+                continue
+            threading.Thread(target=self.handle_tcp_client, args=(conn, addr), daemon=True).start()
+
+    def handle_tcp_client(self, conn, addr):
+        """Handles one TCP connection: read one request, reply, then close."""
+        with TCPConnection(conn) as tcp:
+            try:
+                msg = tcp.recv_message()
+            except (MalformedMessageError, ConnectionClosedError, socket.timeout, ConnectionResetError) as e:
+                self.log.warning(f"[TCP {addr}] Error: {e}")
+                return
+
+            log_recv(self.log, addr, msg["type"], msg["rq"], msg["data"], tcp=True)
+            try:
+                self.dispatch_tcp(msg, tcp, addr)
+            except Exception:
+                self.log.exception(f"TCP handler for {msg['type']} (RQ: {msg['rq']}) from {addr} crashed.")
+
+    def dispatch_tcp(self, msg, tcp, addr):
+        """Routes a TCP request to its handler."""
+        msg_type = msg["type"]
+
+        # TODO P3-02
+
+        self.log.warning(f"Unknown TCP message type from {addr}: {msg_type} (rq={msg['rq']})")
+
+    def send_tcp(self, tcp, addr, msg_type, rq_num, payload=None):
+        """Sends one message on a TCP connection and logs it."""
+        tcp.send_message(msg_type, rq_num, payload)
+        log_send(self.log, addr, msg_type, rq_num, payload, tcp=True)
 
     def listen(self):
         """Main loop continuously listening for incoming UDP datagrams."""
+        threading.Thread(target=self.listen_tcp, daemon=True).start()
         while True:
             try:
                 data, addr = self.sock.recvfrom(4096)
@@ -195,6 +245,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="CENRS Emergency Server")
     parser.add_argument("port", nargs="?", type=int, default=5000, help="UDP port to listen on (default: 5000)")
     parser.add_argument("state_file", nargs="?", default="server_state.json", help="file used to save and restore server state")
+    parser.add_argument("--tcp-port", type=int, default=None, help="TCP port for GET_ACTIVE_ALERTS (default: same number as the UDP port)")
     parser.add_argument("--ack-timeout", type=float, default=2.0, help="seconds to wait for the first ALERT_ACK; doubles on each retry (default: 2.0)")
     parser.add_argument("--drop-rate", type=float, default=0.0, help="chance (0 to 1) of ignoring a received ALERT_ACK, to simulate packet loss (default: 0.0)")
     args = parser.parse_args()
@@ -203,5 +254,5 @@ if __name__ == "__main__":
     if not 0 <= args.drop_rate <= 1:
         parser.error("drop-rate must be between 0 and 1")
 
-    server = EmergencyServer(port=args.port, state_file=args.state_file, ack_timeout=args.ack_timeout, drop_rate=args.drop_rate)
+    server = EmergencyServer(port=args.port, state_file=args.state_file, ack_timeout=args.ack_timeout, drop_rate=args.drop_rate, tcp_port=args.tcp_port)
     server.listen()

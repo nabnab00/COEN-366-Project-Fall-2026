@@ -34,6 +34,7 @@ class ServerTestCase(unittest.TestCase):
         if self.server.poll() is None:                 
             self.server.kill()
             self.server.wait()
+            time.sleep(1)  # give Windows a moment to release the TCP port before binding again
 
     def new_client(self):
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)

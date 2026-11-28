@@ -12,6 +12,7 @@ Campus Emergency Notification and Response System (CENRS)
   - [Resetting everything](#resetting-everything)
   - [Current limitations](#current-limitations)
 - [Protocol decisions](#protocol-decisions)
+  - [TCP framing](#tcp-framing)
   - [PUBLISH_ALERT](#publish_alert)
   - [ALERT](#alert)
   - [ALERT_ACK](#alert_ack)
@@ -32,7 +33,7 @@ Campus Emergency Notification and Response System (CENRS)
 ```
 COEN-366-Project-Fall-2026/
 ├── server/
-│   ├── emergency_server.py   UDP listener: decodes each message and hands it to a handler (one thread per message)
+│   ├── emergency_server.py   UDP + TCP listeners: one thread per UDP message / TCP connection
 │   ├── registration.py       REGISTER / DE-REGISTER
 │   ├── subscriptions.py      SUBSCRIBE / UNSUBSCRIBE, and matches() for alert matching
 │   ├── incidents.py          Incident model (version, ACTIVE/CLOSED) and the Incident_ID generator
@@ -47,6 +48,7 @@ COEN-366-Project-Fall-2026/
 │   └── commands.py           the terminal menu
 ├── shared/                   code used by both server and client
 │   ├── protocol.py           message encoding and decoding
+│   ├── tcp.py                TCP framing: JSON header line + read/write exact byte counts
 │   ├── constants.py          roles, locations, categories, severities, user and incident statuses, and the RQ# generator
 │   └── logger.py             logger setup and the SEND/RECV log helpers
 └── tests/                    automated tests (see Running the tests)
@@ -117,7 +119,8 @@ If Windows Defender Firewall asks whether to allow Python on the network, allow 
 ```bash
 python3 -m server.emergency_server
 ```
-The server listens on UDP `127.0.0.1:5000` and saves its state to `server_states/server_state.json`.
+The server listens on UDP `127.0.0.1:5000` and on TCP at the same host and port number by default.
+It saves its state to `server_states/server_state.json`.
 On startup it restores the saved users and subscriptions, so a restarted server remembers everyone.
 
 Optional arguments (only needed for testing; the demo uses the defaults):
@@ -126,11 +129,13 @@ Optional arguments (only needed for testing; the demo uses the defaults):
 |----------|---------|---------|
 | `port` | `5000` | UDP port the server listens on |
 | `state_file` | `server_state.json` | state file name, inside `server_states/` |
+| `--tcp-port` | same as `port` | TCP port for `GET_ACTIVE_ALERTS` and TCP services |
 | `--ack-timeout` | `2.0` | seconds to wait for the first ALERT_ACK; doubles on each retry |
 | `--drop-rate` | `0.0` | chance (0 to 1) of ignoring a received ALERT_ACK, to simulate packet loss |
 
 ```bash
 python3 -m server.emergency_server 5099 test.json     # test server: port 5099, server_states/test.json
+python3 -m server.emergency_server --tcp-port 5100    # TCP on 5100, UDP on 5000
 python3 -m server.emergency_server --drop-rate 0.5    # ignore about half of the ALERT_ACKs (demo of lost ACKs)
 ```
 
@@ -200,7 +205,18 @@ they are registered, and the server ignores their DE-REGISTER because it has no 
 - On Windows, sending UDP to a client that has closed its socket makes the server's next receive fail with `ConnectionResetError`. The server logs a warning and keeps running, so the only effect is that warning in the log.
 
 ## Protocol decisions
-Choices the spec leaves to the team. Copy these into the report's design and assumptions sections.IDK what to write so I let Ai do it. Reminder to delete after !!!!
+Choices the spec leaves to the team. Copy these into the report's design and 
+assumptions sections.IDK what to write so I let Ai do it. Reminder to delete after 
+!!!!
+
+### TCP framing
+UDP still sends one JSON object per datagram. TCP is a byte stream, so both ends use `shared/tcp.py` (`TCPConnection`) and the same rule:
+
+1. **Header line.** Every protocol message is one JSON object (same `{type, rq, data}` shape as UDP) encoded as UTF-8 and ended with a single `\n`.
+2. **Optional raw bytes.** For attachment transfer, the header may include `File_Size`. The sender then writes exactly that many file bytes on the same connection (`send_bytes`). The receiver reads the header with `recv_message()`, then reads exactly `File_Size` bytes with `recv_exact(n)`.
+3. **Limits.** A header line longer than 64 KiB is refused. `recv_exact` rejects a negative size or a size above 16 MiB (`MAX_FILE_SIZE`).
+
+`GET_ACTIVE_ALERTS`, peer-to-peer `ATTACH_*`, and any later TCP message all use this framing.
 
 ### PUBLISH_ALERT
 Request payload: `Category`, `Location`, `Severity`, `Title`, `Description`, and optionally `Attachment` (missing means `NONE`) and `Name`.
@@ -302,6 +318,7 @@ The server and every client write a log both **on screen** and **to a file**:
 2026-11-04 16:23:40.317 [server] INFO    RECV <- 127.0.0.1:63009  REGISTER 1 {'Name': 'Jake', ...}
 2026-11-04 16:23:40.321 [server] INFO    STATE  [REGISTER] Registered Jake (SUBSCRIBER)
 2026-11-04 16:23:40.321 [server] INFO    SEND -> 127.0.0.1:63009  REGISTERED 1 {...}
+2026-11-27 22:10:01.100 [server] INFO    RECV <- 127.0.0.1:51234 [TCP]  GET_ACTIVE_ALERTS 22 {'Name': 'Alice'}
 ```
 timestamp · process · level · message
 
@@ -309,6 +326,7 @@ timestamp · process · level · message
 |-----|---------|
 | `SEND ->` | this process sent a message; the address is who it went **to** |
 | `RECV <-` | this process received a message; the address is who it came **from** |
+| `[TCP]` | the message went over a TCP connection (omitted for UDP) |
 | `STATE` | the stored state changed (user registered, removed, subscribed…) |
 
 Every request appears twice across the logs: `SEND` in the sender's log and `RECV` in the receiver's,
@@ -380,6 +398,7 @@ Run the tests **before every push / pull request**.
 | File | Covers |
 |------|--------|
 | `tests/helpers.py` | shared setup: start/stop server, fake clients, `register`, `subscribe`, `unsubscribe`, `saved_state` |
+| `tests/test_tcp.py` | TCP framing (`shared/tcp.py`) and the server's threaded TCP loop |
 | `tests/test_registration.py` | REGISTER and DE-REGISTER, including denial reasons |
 | `tests/test_subscriptions.py` | SUBSCRIBE, UNSUBSCRIBE, and wildcard matching |
 | `tests/test_persistence.py` | recovery after a crash: users, incidents, status reports, alert recipients, delivery status, and concurrent clients |
