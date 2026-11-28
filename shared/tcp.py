@@ -39,6 +39,8 @@ class TCPConnection:
         while True:
             end = self._buffer.find(b"\n")
             if end != -1:
+                if end > MAX_LINE_LENGTH:
+                    raise MalformedMessageError("Message line too long")
                 line = bytes(self._buffer[:end])
                 del self._buffer[:end + 1]
                 return line

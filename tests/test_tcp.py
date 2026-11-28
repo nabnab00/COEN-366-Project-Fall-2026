@@ -75,6 +75,12 @@ class TestFraming(unittest.TestCase):
         with self.assertRaises(MalformedMessageError):
             self.receiver.recv_message()
 
+    def test_line_too_long_with_newline(self):
+        # newline arrives in the same chunk
+        threading.Thread(target=self.raw.sendall, args=(b"x" * (MAX_LINE_LENGTH + 10) + b"\n",)).start()
+        with self.assertRaises(MalformedMessageError):
+            self.receiver.recv_message()
+
     def test_silent_peer_times_out(self):
         with self.assertRaises(socket.timeout):
             self.receiver.recv_message()
