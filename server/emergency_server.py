@@ -204,7 +204,7 @@ class EmergencyServer:
         with TCPConnection(conn) as tcp:
             try:
                 msg = tcp.recv_message()
-            except (MalformedMessageError, ConnectionClosedError, socket.timeout) as e:
+            except (MalformedMessageError, ConnectionClosedError, socket.timeout, ConnectionResetError) as e:
                 self.log.warning(f"[TCP {addr}] Error: {e}")
                 return
 
